@@ -1,0 +1,31 @@
+Name: Config
+Description: 
+      Configuration management module for PostgreSQL applications. 
+      Store config parameters for your 
+      configurable entities, manage constraints and defaults for them. 
+      Automatic configurations check control, determining, whether 
+      configuration is correct and ready to be used in real system.
+      -------
+      The read/write operations are not implemented very optimal, especially
+      when automatic comletness checking is enabled. The system 
+      is configurable to be fast, if this feature is disabled.
+      Anyway, system isn't very fast, but it has more than enough speed 
+      for good nonbison configuration management for your system with no 
+      thousands of interconnected configs 
+      and not thousands per second of queries to configs. 
+      The code optimizations will be considered in further versions.
+      Also, cycles are restricted in relations of type superconfig-subconfig.
+      Enabling cycles support will be considered in further versions.
+Version: 0.1
+License: BSD3
+Copyright: Copyright (c) 2010 Andrejs Sisojevs
+License-File: COPYING
+Author: Andrejs Sisojevs <andrejs.sisojevs@nextmail.ru>
+Maintainer: Andrejs Sisojevs <andrejs.sisojevs@nextmail.ru>
+Stability: beta
+Homepage: http://github.com/Andrey-Sisoyev/DBP-Config
+Category: Database
+Tested-With: ArchLinux, PostgreSQL v8.4
+Depends-On: Codifier >= 0.5.4
+Manual-file: HOWTO
+Safe-to-test-with-user-data: FALSE
