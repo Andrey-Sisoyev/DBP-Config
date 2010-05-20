@@ -7,6 +7,11 @@
 --------------------------------------------------------------------------
 --------------------------------------------------------------------------
 
+\echo NOTICE >>>>> config_tree.drop.sql [BEGIN]
+
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+
 -- Reference functions:
 DROP FUNCTION IF EXISTS finvalsrc2cfgtreerel(par_finvalsrc t_cpvalue_final_source);
 DROP FUNCTION IF EXISTS finvalsrcEQcfgtreerel(par_finvalsrc t_cpvalue_final_source, par_cfgtreerel t_cfg_tree_rel_type);
@@ -88,3 +93,8 @@ DROP TYPE IF EXISTS t_config_keys_list;
 DROP TYPE IF EXISTS t_configs_tree_rel_cycles_filtered;
 DROP TYPE IF EXISTS t_configs_tree_rel;
 DROP TYPE IF EXISTS t_cfg_tree_rel_type;
+
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+
+\echo NOTICE >>>>> config_tree.drop.sql [END]

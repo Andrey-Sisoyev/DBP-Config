@@ -7,6 +7,11 @@
 --------------------------------------------------------------------------
 --------------------------------------------------------------------------
 
+\echo NOTICE >>>>> confentityparam.drop.sql [BEGIN]
+
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+
 -- Reference functions:
 DROP FUNCTION IF EXISTS mk_cpvalue_null();
 DROP FUNCTION IF EXISTS mk_cpvalue_l(value varchar);
@@ -93,3 +98,7 @@ DROP TYPE IF EXISTS t_cpvalue_uni;
 DROP TYPE IF EXISTS t_confentityparam_key;
 DROP TYPE IF EXISTS t_config_param__short;
 
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+
+\echo NOTICE >>>>> confentityparam.drop.sql [END]

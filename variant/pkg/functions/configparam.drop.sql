@@ -7,6 +7,11 @@
 --------------------------------------------------------------------------
 --------------------------------------------------------------------------
 
+\echo NOTICE >>>>> configparam.drop.sql [BEGIN]
+
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+
 -- Reference functions:
 DROP FUNCTION IF EXISTS mk_cparameter_value(
           par_param_base      t_cparameter_uni
@@ -76,3 +81,7 @@ DROP TYPE IF EXISTS t_configparam_key;
 DROP TYPE IF EXISTS t_cparameter_value_uni;
 DROP TYPE IF EXISTS t_cpvalue_final_source;
 
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+
+\echo NOTICE >>>>> configparam.drop.sql [END]

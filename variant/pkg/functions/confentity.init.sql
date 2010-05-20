@@ -7,6 +7,11 @@
 --------------------------------------------------------------------------
 --------------------------------------------------------------------------
 
+\echo NOTICE >>>>> confentity.init.sql [BEGIN]
+
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+
 CREATE TYPE t_confentity_key AS (confentity_codekeyl t_code_key_by_lng);
 
 COMMENT ON TYPE t_confentity_key IS
@@ -16,25 +21,25 @@ COMMENT ON TYPE t_confentity_key IS
 
 CREATE OR REPLACE FUNCTION make_confentitykey(par_confentity_key t_code_key_by_lng) RETURNS t_confentity_key AS $$
         SELECT ROW($1) :: sch_<<$app_name$>>.t_confentity_key;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION make_confentitykey_null() RETURNS t_confentity_key AS $$
         SELECT ROW(make_codekeyl_null()) :: sch_<<$app_name$>>.t_confentity_key;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION make_confentitykey_bystr(par_confentity_str varchar) RETURNS t_confentity_key AS $$
         SELECT ROW(make_codekeyl_bystr($1)) :: sch_<<$app_name$>>.t_confentity_key;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION make_confentitykey_byid(par_confentity_id integer) RETURNS t_confentity_key AS $$
         SELECT ROW(make_codekeyl_byid($1)) :: sch_<<$app_name$>>.t_confentity_key;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 --------------
 
 CREATE OR REPLACE FUNCTION code_id_of_confentitykey(par_confentity_key t_confentity_key) RETURNS integer AS $$
         SELECT ((($1).confentity_codekeyl).code_key).code_id;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 --------------
 
@@ -43,7 +48,7 @@ CREATE OR REPLACE FUNCTION confentity_is_null(par_confentity_key t_confentity_ke
                     WHEN sch_<<$app_name$>>.codekeyl_type(($1).confentity_codekeyl) = 'undef' THEN TRUE
                     ELSE FALSE
                END;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 --------------
 
@@ -51,7 +56,7 @@ CREATE OR REPLACE FUNCTION confentity_has_lng(par_confentity_key t_confentity_ke
         SELECT CASE WHEN sch_<<$app_name$>>.confentity_is_null($1) THEN FALSE
                     ELSE sch_<<$app_name$>>.codekey_type((($1).confentity_codekeyl).key_lng) != 'undef'
                END;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 --------------
 
@@ -65,7 +70,7 @@ CREATE OR REPLACE FUNCTION show_confentitykey(par_confentitykey t_confentity_key
                       END
                )
             || '}';
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 --------------
 
@@ -73,7 +78,7 @@ CREATE OR REPLACE FUNCTION optimized_confentitykey_isit(par_confentitykey t_conf
         SELECT CASE WHEN sch_<<$app_name$>>.confentity_is_null($1) THEN FALSE
                     ELSE sch_<<$app_name$>>.optimized_codekeyl_isit(($1).confentity_codekeyl, 1 + 4 * ($2 :: integer))
                END;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 COMMENT ON FUNCTION optimized_confentitykey_isit(par_confentitykey t_confentity_key, par_opt_lng boolean) IS
 'If "par_opt_lng" is set to TRUE, then language key is checked to be optimized too. Else, is may be sufficient to have explicitly determined confentity code ID.
@@ -81,7 +86,7 @@ COMMENT ON FUNCTION optimized_confentitykey_isit(par_confentitykey t_confentity_
 
 CREATE OR REPLACE FUNCTION optimized_confentitykey_isit(par_confentitykey t_confentity_key) RETURNS boolean AS $$
         SELECT sch_<<$app_name$>>.optimized_confentitykey_isit($1, sch_<<$app_name$>>.confentity_has_lng($1));
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 COMMENT ON FUNCTION optimized_confentitykey_isit(par_confentitykey t_confentity_key) IS
 'Wrapper around "optimized_confentitykey_isit(par_confentitykey t_confentity_key, par_opt_lng boolean)"
@@ -91,15 +96,16 @@ COMMENT ON FUNCTION optimized_confentitykey_isit(par_confentitykey t_confentity_
 --------------
 
 -- problem cant know, if key was found for "par_ifexists = TRUE"
-CREATE OR REPLACE FUNCTION optimize_confentitykey(par_ifexists boolean, par_confentitykey t_confentity_key) RETURNS t_confentity_key AS $$
+CREATE OR REPLACE FUNCTION optimize_confentitykey(par_ifexists boolean, par_confentitykey t_confentity_key) RETURNS t_confentity_key
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g sch_<<$app_name$>>.t_addressed_code_key_by_lng;
         n sch_<<$app_name$>>.t_code_key_by_lng;
         r sch_<<$app_name$>>.t_confentity_key;
 
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
         -- raise notice '---------------->>>>>>>>>>>0> %', par_confentitykey;
         g:= optimize_acodekeyl(
                 par_ifexists
@@ -113,17 +119,16 @@ BEGIN
         n:= make_codekeyl(g.key_lng, g.code_key);
         r:= make_confentitykey(n);
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 ---------------
 
 CREATE OR REPLACE FUNCTION get_confentity_default(par_confentity_key t_confentity_key) RETURNS varchar AS $$
         SELECT default_configuration_id
         FROM sch_<<$app_name$>>.configurable_entities
-        WHERE confentity_code_id = code_id_of_confentitykey(sch_<<$app_name$>>.optimize_confentitykey(FALSE, $1));
+        WHERE confentity_code_id = sch_<<$app_name$>>.code_id_of_confentitykey(sch_<<$app_name$>>.optimize_confentitykey(FALSE, $1));
 $$ LANGUAGE SQL;
 
 ---------------
@@ -134,13 +139,12 @@ $$ LANGUAGE SQL;
 
 ---------------
 
-CREATE OR REPLACE FUNCTION get_confentity_id(par_confentity_key t_confentity_key) RETURNS integer AS $$
-DECLARE
-        r integer;
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
+CREATE OR REPLACE FUNCTION get_confentity_id(par_confentity_key t_confentity_key) RETURNS integer
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
+DECLARE r integer;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         r:= NULL;
         CASE codekeyl_type($1.confentity_codekeyl)
             WHEN 'undef' THEN
@@ -151,10 +155,9 @@ BEGIN
             ELSE RAISE EXCEPTION 'Unsupported confentity key type: "%".', codekeyl_type($1.confentity_codekeyl);
         END CASE;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 --------------------------------------------------------------------------
 --------------------------------------------------------------------------
@@ -162,17 +165,16 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION add_confentity_names(
           par_confentity_key t_confentity_key
         , par_names          name_construction_input[]
-        ) RETURNS integer AS $$
+        ) RETURNS integer
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g sch_<<$app_name$>>.t_confentity_key;
 
         rows_count_accum integer;
         rows_count_add   integer;
-
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         g:= optimize_confentitykey(FALSE, par_confentity_key);
 
         rows_count_accum:= 0;
@@ -187,10 +189,9 @@ BEGIN
 
         rows_count_accum:= rows_count_accum + rows_count_add;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN rows_count_accum;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION add_confentity_names(
           par_confentity_key t_confentity_key
@@ -204,13 +205,13 @@ COMMENT ON FUNCTION add_confentity_names(
 CREATE OR REPLACE FUNCTION new_confentity(
           par_name           varchar
         , par_ifdoesnt_exist boolean
-        ) RETURNS integer AS $$
+        ) RETURNS integer
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         r integer;
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         r:= get_confentity_id(make_confentitykey_bystr(par_name));
         IF r IS NULL THEN
                 r:= (add_subcodes_under_codifier(
@@ -223,10 +224,9 @@ BEGIN
                 RAISE EXCEPTION 'Configurable entity "%" already exists!', par_name;
         END IF;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$ ;
 
 COMMENT ON FUNCTION new_confentity(par_name varchar, par_ifdoesnt_exist boolean) IS
 'Returns confentity ID.
@@ -238,13 +238,13 @@ CREATE OR REPLACE FUNCTION new_confentity(
           par_name           varchar
         , par_ifdoesnt_exist boolean
         , par_lng_names      name_construction_input[]
-        ) RETURNS integer AS $$
+        ) RETURNS integer
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         target_confentity_id integer;
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         target_confentity_id:= new_confentity(par_name, par_ifdoesnt_exist);
 
         PERFORM add_confentity_names(
@@ -262,10 +262,9 @@ BEGIN
                        )
                 );
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN target_confentity_id;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 ------------------------------
 
@@ -293,7 +292,10 @@ CREATE OR REPLACE FUNCTION delete_confentity(
                 , par_cascade_setnull_subcfgrefernces    boolean
                 , par_warn_with_list_of_subcfgrefernces  boolean
                 , par_dont_modify_any_referrer_param     boolean
-                ) RETURNS integer AS $$
+                ) RETURNS integer
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g sch_<<$app_name$>>.t_confentity_key;
 
@@ -308,11 +310,7 @@ DECLARE
 
         ref_params_lst   sch_<<$app_name$>>.t_confentity_param_wdelstats__short[];
         cfgs_lst         sch_<<$app_name$>>.t_cfg_wdelstats__short[];
-
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         g:= optimize_confentitykey(par_ifexists, par_confentity_key);
         IF par_ifexists THEN
             IF NOT optimized_confentitykey_isit(g) THEN
@@ -434,10 +432,9 @@ BEGIN
                 rows_count_accum:= rows_count_accum + rows_count_add;
         END IF;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN rows_count_accum;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION delete_confentity(
                   par_ifexists                           boolean
@@ -495,7 +492,8 @@ CREATE OR REPLACE FUNCTION delete_confentity(
                 , par_confentity_key       t_confentity_key
                 , par_cascade              boolean
                 , par_dont_modify_anything boolean
-                ) RETURNS integer AS $$
+                ) RETURNS integer
+AS $$
         SELECT sch_<<$app_name$>>.delete_confentity(
                   $1
                 , $2
@@ -542,31 +540,31 @@ The report on all dependant items will be outputed with a set of WARNINGs.
 -- GRANTS
 
 -- Reference functions:
-GRANT EXECUTE ON FUNCTION make_confentitykey(par_confentity_key t_code_key_by_lng)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION make_confentitykey_null()TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION make_confentitykey_bystr(par_confentity_str varchar)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION make_confentitykey_byid(par_confentity_id integer)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION code_id_of_confentitykey(par_confentity_key t_confentity_key)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION confentity_is_null(par_confentity_key t_confentity_key)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION confentity_has_lng(par_confentity_key t_confentity_key)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION show_confentitykey(par_confentitykey t_confentity_key)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION optimized_confentitykey_isit(par_confentitykey t_confentity_key, par_opt_lng boolean)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION optimized_confentitykey_isit(par_confentitykey t_confentity_key)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION make_confentitykey(par_confentity_key t_code_key_by_lng)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION make_confentitykey_null()TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION make_confentitykey_bystr(par_confentity_str varchar)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION make_confentitykey_byid(par_confentity_id integer)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION code_id_of_confentitykey(par_confentity_key t_confentity_key)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION confentity_is_null(par_confentity_key t_confentity_key)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION confentity_has_lng(par_confentity_key t_confentity_key)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION show_confentitykey(par_confentitykey t_confentity_key)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION optimized_confentitykey_isit(par_confentitykey t_confentity_key, par_opt_lng boolean)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION optimized_confentitykey_isit(par_confentitykey t_confentity_key)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
 -- Lookup functions:
-GRANT EXECUTE ON FUNCTION optimize_confentitykey(par_ifexists boolean, par_confentitykey t_confentity_key)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION get_confentity_default(par_confentity_key t_confentity_key)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION get_confentity_id(par_confentity_name varchar)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION get_confentity_id(par_confentity_key t_confentity_key)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION optimize_confentitykey(par_ifexists boolean, par_confentitykey t_confentity_key)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION get_confentity_default(par_confentity_key t_confentity_key)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION get_confentity_id(par_confentity_name varchar)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION get_confentity_id(par_confentity_key t_confentity_key)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
 -- Administration functions:
-GRANT EXECUTE ON FUNCTION add_confentity_names(par_confentity_key t_confentity_key, par_names name_construction_input[]) TO user_<<$app_name$>>_data_admin;
-GRANT EXECUTE ON FUNCTION new_confentity(par_name varchar, par_ifdoesnt_exist boolean) TO user_<<$app_name$>>_data_admin;
+GRANT EXECUTE ON FUNCTION add_confentity_names(par_confentity_key t_confentity_key, par_names name_construction_input[]) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
+GRANT EXECUTE ON FUNCTION new_confentity(par_name varchar, par_ifdoesnt_exist boolean) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
 GRANT EXECUTE ON FUNCTION new_confentity(
           par_name           varchar
         , par_ifdoesnt_exist boolean
         , par_lng_names      name_construction_input[]
-        ) TO user_<<$app_name$>>_data_admin;
+        ) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
 GRANT EXECUTE ON FUNCTION delete_confentity(
                   par_ifexists                           boolean
                 , par_confentity_key                     t_confentity_key
@@ -587,10 +585,15 @@ GRANT EXECUTE ON FUNCTION delete_confentity(
                 , par_cascade_setnull_subcfgrefernces    boolean
                 , par_warn_with_list_of_subcfgrefernces  boolean
                 , par_dont_modify_any_referrer_param     boolean
-                ) TO user_<<$app_name$>>_data_admin;
+                ) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
 GRANT EXECUTE ON FUNCTION delete_confentity(
                   par_if_exists            boolean
                 , par_confentity_key       t_confentity_key
                 , par_cascade              boolean
                 , par_dont_modify_anything boolean
-                ) TO user_<<$app_name$>>_data_admin;
+                ) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
+
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+
+\echo NOTICE >>>>> confentity.init.sql [END]

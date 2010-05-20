@@ -254,7 +254,7 @@ FROM unnest(super_cfgs_of(
 
 ------------
 
-SELECT pkg_<<$app_name$>>__create_dummies();
+SELECT pkg_<<$pkg.name_p$>>_<<$pkg.ver_p$>>__create_dummies();
 SELECT set_confparam_value(
                 make_configparamkey_bystr3('Dummy_1_CE', 'Dummy_1_CFG', 'dummy_1_param_11')
               , mk_cpvalue_s(NULL :: varchar, 'dummy_1_param_1', 'alw_onl_lnk')

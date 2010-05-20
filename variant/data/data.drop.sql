@@ -7,10 +7,19 @@
 --------------------------------------------------------------------------
 --------------------------------------------------------------------------
 
-\echo NOTICE >>>>> data.drop.sql
+\c <<$db_name$>> user_db<<$db_name$>>_app<<$app_name$>>_owner
+SET search_path TO sch_<<$app_name$>>, comn_funs, public;
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
 
--- SELECT * FROM configurations;
+\echo NOTICE >>>>> data.drop.sql [BEGIN]
+
 \echo Notices on deletion won't be outputed, since triggers are already removed.
-SELECT delete_cfgmgrsys_setup_confentity__();
-DROP FUNCTION delete_cfgmgrsys_setup_confentity__();
-DROP FUNCTION   init_cfgmgrsys_setup_confentity__();
+SELECT pkg_<<$pkg.name_p$>>_<<$pkg.ver_p$>>__initial_data_delete__();
+DROP FUNCTION IF EXISTS pkg_<<$pkg.name_p$>>_<<$pkg.ver_p$>>__initial_data_insert__();
+DROP FUNCTION IF EXISTS pkg_<<$pkg.name_p$>>_<<$pkg.ver_p$>>__initial_data_delete__();
+
+-- This is not obligate:
+-- DELETE FROM dbp_helloworld;
+
+\echo NOTICE >>>>> data.drop.sql [END]

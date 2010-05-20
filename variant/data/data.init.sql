@@ -7,29 +7,48 @@
 --------------------------------------------------------------------------
 --------------------------------------------------------------------------
 
-\echo data.sql
-\c <<$db_name$>> user_<<$app_name$>>_owner
-SET search_path TO sch_<<$app_name$>>, public;
+\c <<$db_name$>> user_db<<$db_name$>>_app<<$app_name$>>_owner
+SET search_path TO sch_<<$app_name$>>, comn_funs, public;
+\set ECHO none
 
-\echo NOTICE >>>>> data.init.sql
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
 
-------------------------------------------------------------------------
+\echo NOTICE >>>>> data.init.sql [BEGIN]
 
-CREATE OR REPLACE FUNCTION delete_cfgmgrsys_setup_confentity__() RETURNS integer AS $$
-        SELECT sch_<<$app_name$>>.delete_confentity(TRUE, sch_<<$app_name$>>.make_confentitykey_bystr('Configuration management system setup'), TRUE, FALSE);
-$$ LANGUAGE SQL;
+\set ECHO none
 
-----------------------
+-------------------
+-------------------
 
-CREATE OR REPLACE FUNCTION init_cfgmgrsys_setup_confentity__() RETURNS integer AS $$
-DECLARE
-        r                    RECORD;
-        setup_completeness   sch_<<$app_name$>>.t_config_completeness_check_result;
-        namespace_info       sch_<<$app_name$>>.t_namespace_info;
+CREATE OR REPLACE FUNCTION pkg_<<$pkg.name_p$>>_<<$pkg.ver_p$>>__initial_data_delete__() RETURNS integer
+LANGUAGE plpgsql
+SET search_path TO sch_<<$app_name$>> -- , comn_funs, public
+AS $$
+DECLARE rows_cnt integer;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
+        PERFORM sch_<<$app_name$>>.delete_confentity(TRUE, sch_<<$app_name$>>.make_confentitykey_bystr('Configuration management system setup'), TRUE, FALSE);
+        RETURN 0;
+END;
+$$;
 
-        PERFORM delete_cfgmgrsys_setup_confentity__();
+COMMENT ON FUNCTION pkg_<<$pkg.name_p$>>_<<$pkg.ver_p$>>__initial_data_delete__() IS
+'Deletes initial data from the database package "<<$pkg.name$>>" (version "<<$pkg.ver$>>").
+This data is considered to be a part of the package.
+Data is assumed to be inserted using "pkg_<<$pkg.name_p$>>_<<$pkg.ver_p$>>__initial_data_insert__()" function.
+';
+
+-------------------
+-------------------
+
+CREATE OR REPLACE FUNCTION pkg_<<$pkg.name_p$>>_<<$pkg.ver_p$>>__initial_data_insert__() RETURNS integer
+LANGUAGE plpgsql
+SET search_path TO sch_<<$app_name$>> -- , comn_funs, public
+AS $$
+DECLARE rows_cnt integer;
+        setup_completeness   sch_<<$app_name$>>.t_config_completeness_check_result;
+BEGIN
+        PERFORM pkg_<<$pkg.name_p$>>_<<$pkg.ver_p$>>__initial_data_delete__();
 
         PERFORM new_confentity_w_params(
                         'Configuration management system setup'
@@ -216,19 +235,30 @@ This option simply regulates, if "confentity_domain_onmodify" trigger function i
 
         RAISE NOTICE 'Configuration management system setup initiated.';
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN 0;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
-COMMENT ON FUNCTION init_cfgmgrsys_setup_confentity__() IS
+COMMENT ON FUNCTION pkg_<<$pkg.name_p$>>_<<$pkg.ver_p$>>__initial_data_insert__() IS
 'Creates a setup, that is actually used by the configuration management part of DBMS application.
-The function is alse a package usage self-example.';
+The function is alse a package usage self-example.
+
+Inserts initial data into the database package "<<$pkg.name$>>" (version "<<$pkg.ver$>>").
+This data is considered to be a part of the package.
+Data is assumed to be possible to delete the initial data using "pkg_<<$pkg.name_p$>>_<<$pkg.ver_p$>>__initial_data_delete__()" function.
+Also, this deletion function is called in the beginning of inserting function.
+';
+
+-------------------
+-------------------
 
 SELECT set_config('client_min_messages', 'NOTICE', FALSE);
+
 \set ECHO queries
-
-SELECT init_cfgmgrsys_setup_confentity__();
-
+SELECT pkg_<<$pkg.name_p$>>_<<$pkg.ver_p$>>__initial_data_insert__();
 \set ECHO none
 
+-------------------
+-------------------
+
+\echo NOTICE >>>>> data.init.sql [END]

@@ -7,6 +7,11 @@
 --------------------------------------------------------------------------
 --------------------------------------------------------------------------
 
+\echo NOTICE >>>>> completeness.drop.sql [BEGIN]
+
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+
 -- Reference functions:
 DROP FUNCTION IF EXISTS completeness_interpretation(par_completeness t_config_completeness_check_result);
 DROP FUNCTION IF EXISTS show_completeness_check_result(par_completeness t_config_completeness_check_result);
@@ -69,3 +74,8 @@ DROP FUNCTION IF EXISTS uncomplete_cfg(par_config_key t_config_key);
 DROP TYPE IF EXISTS t_completeness_check_file;
 DROP TYPE IF EXISTS t_completeness_check_row;
 DROP TYPE IF EXISTS t_thorough_report_warning_mode;
+
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+
+\echo NOTICE >>>>> completeness.drop.sql [END]

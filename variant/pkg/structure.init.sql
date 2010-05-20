@@ -7,19 +7,32 @@
 --------------------------------------------------------------------------
 --------------------------------------------------------------------------
 
-\echo NOTICE >>>>> structure.init.sql
-\c <<$db_name$>> user_<<$app_name$>>_owner
+\c <<$db_name$>> user_db<<$db_name$>>_app<<$app_name$>>_owner
 
-SET search_path TO sch_<<$app_name$>>, public; -- sets only for current session
+SET search_path TO sch_<<$app_name$>>, comn_funs, public; -- sets only for current session
+\set ECHO none
 
 INSERT INTO dbp_packages (package_name, package_version, dbp_standard_version)
                    VALUES('<<$pkg.name$>>', '<<$pkg.ver$>>', '<<$pkg.std_ver$>>');
 
 -- ^^^ don't change this !!
+--
+-- IF CREATING NEW CUSTOM ROLES/TABLESPACES, then don't forget to register
+-- them (under application owner DB account) using
+-- FUNCTION public.register_cwobj_tobe_dependant_on_current_dbapp(
+--        par_cwobj_name              varchar
+--      , par_cwobj_type              t_clusterwide_obj_types
+--      , par_cwobj_additional_data_1 varchar
+--      , par_application_name        varchar
+--      , par_drop_it_by_cascade_when_dropping_db  boolean
+--      , par_drop_it_by_cascade_when_dropping_app boolean
+--      )
+-- , where TYPE public.t_clusterwide_obj_types IS ENUM ('tablespace', 'role')
 
 -------------------------------------------------------------------------------
 -------------------------------------------------------------------------------
 -------------------------------------------------------------------------------
+\echo NOTICE >>>>> structure.init.sql [BEGIN]
 
 SELECT new_codifier_w_subcodes(
           make_codekeyl_bystr('Usual codifiers')
@@ -50,8 +63,8 @@ CREATE TABLE configurable_entities (
      -- A FK is also added a bit later
 ) TABLESPACE tabsp_<<$db_name$>>_<<$app_name$>>;
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE configurable_entities TO user_<<$app_name$>>_data_admin;
-GRANT SELECT                         ON TABLE configurable_entities TO user_<<$app_name$>>_data_reader;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE configurable_entities TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
+GRANT SELECT                         ON TABLE configurable_entities TO user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
 -------------------------------------------------------------------------------
 -------------------------------------------------------------------------------
@@ -110,8 +123,8 @@ There are two ways to command system to recheck completeness and update the "com
     (Notice, that you must specify confentity code ID, since configuration_id alone is not enough to uniquely identify config)
 ';
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE configurations TO user_<<$app_name$>>_data_admin;
-GRANT SELECT                         ON TABLE configurations TO user_<<$app_name$>>_data_reader;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE configurations TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
+GRANT SELECT                         ON TABLE configurations TO user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
 CREATE INDEX configs_confentities_idx ON configurations(confentity_code_id) TABLESPACE tabsp_<<$db_name$>>_<<$app_name$>>_idxs;
 
@@ -148,8 +161,8 @@ SELECT new_code_by_userseqs(
 
 ALTER TABLE configurations_names ALTER COLUMN entity SET DEFAULT code_id_of_entity('configuration');
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE configurations_names TO user_<<$app_name$>>_data_admin;
-GRANT SELECT                         ON TABLE configurations_names TO user_<<$app_name$>>_data_reader;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE configurations_names TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
+GRANT SELECT                         ON TABLE configurations_names TO user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
 CREATE INDEX names_of_configs_idx ON configurations_names(name) TABLESPACE tabsp_<<$db_name$>>_<<$app_name$>>_idxs;
 
@@ -160,9 +173,9 @@ CREATE TYPE t_confparam_type AS ENUM ('leaf', 'subconfig');
 
 CREATE TYPE t_confparam_constraint AS (constraint_function varchar);
 
-CREATE OR REPLACE FUNCTION mk_confparam_constraint(par_fun varchar) RETURNS t_confparam_constraint AS $$
-        SELECT ROW($1) :: t_confparam_constraint;
-$$ LANGUAGE SQL;
+CREATE OR REPLACE FUNCTION mk_confparam_constraint(par_fun varchar) RETURNS t_confparam_constraint LANGUAGE SQL AS $$
+        SELECT ROW($1) :: sch_<<$app_name$>>.t_confparam_constraint;
+$$;
 
 COMMENT ON TYPE t_confparam_constraint IS
 'A definite standart must be followed here:
@@ -212,8 +225,8 @@ CREATE TABLE configurations_parameters (
        , UNIQUE (confentity_code_id, parameter_id, parameter_type)
 ) TABLESPACE tabsp_<<$db_name$>>_<<$app_name$>>;
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE configurations_parameters TO user_<<$app_name$>>_data_admin;
-GRANT SELECT                         ON TABLE configurations_parameters TO user_<<$app_name$>>_data_reader;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE configurations_parameters TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
+GRANT SELECT                         ON TABLE configurations_parameters TO user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
 CREATE INDEX confentities_of_params_idx ON configurations_parameters(confentity_code_id) TABLESPACE tabsp_<<$db_name$>>_<<$app_name$>>_idxs;
 CREATE INDEX params_of_confentities_idx ON configurations_parameters(parameter_id)       TABLESPACE tabsp_<<$db_name$>>_<<$app_name$>>_idxs;
@@ -242,8 +255,8 @@ SELECT new_code_by_userseqs(
 
 ALTER TABLE configurations_parameters_names ALTER COLUMN entity SET DEFAULT code_id_of_entity('configuration parameter');
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE configurations_parameters_names TO user_<<$app_name$>>_data_admin;
-GRANT SELECT                         ON TABLE configurations_parameters_names TO user_<<$app_name$>>_data_reader;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE configurations_parameters_names TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
+GRANT SELECT                         ON TABLE configurations_parameters_names TO user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
 CREATE INDEX names_of_confparams_idx ON configurations_parameters_names(name) TABLESPACE tabsp_<<$db_name$>>_<<$app_name$>>_idxs;
 
@@ -265,8 +278,8 @@ CREATE TABLE configurations_parameters__leafs (
                     ON DELETE CASCADE ON UPDATE CASCADE
 ) TABLESPACE tabsp_<<$db_name$>>_<<$app_name$>>;
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE configurations_parameters__leafs TO user_<<$app_name$>>_data_admin;
-GRANT SELECT                         ON TABLE configurations_parameters__leafs TO user_<<$app_name$>>_data_reader;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE configurations_parameters__leafs TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
+GRANT SELECT                         ON TABLE configurations_parameters__leafs TO user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
 CREATE        INDEX pl_confentities_of_params_idx ON configurations_parameters__leafs(confentity_code_id) TABLESPACE tabsp_<<$db_name$>>_<<$app_name$>>_idxs;
 CREATE        INDEX pl_params_of_confentities_idx ON configurations_parameters__leafs(parameter_id)       TABLESPACE tabsp_<<$db_name$>>_<<$app_name$>>_idxs;
@@ -288,8 +301,8 @@ CREATE TABLE configurations_parameters_values__leafs (
                     ON DELETE CASCADE  ON UPDATE CASCADE
 ) TABLESPACE tabsp_<<$db_name$>>_<<$app_name$>>;
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE configurations_parameters_values__leafs TO user_<<$app_name$>>_data_admin;
-GRANT SELECT                         ON TABLE configurations_parameters_values__leafs TO user_<<$app_name$>>_data_reader;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE configurations_parameters_values__leafs TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
+GRANT SELECT                         ON TABLE configurations_parameters_values__leafs TO user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
 CREATE INDEX pvl_confentities_of_params_idx ON configurations_parameters_values__leafs(confentity_code_id) TABLESPACE tabsp_<<$db_name$>>_<<$app_name$>>_idxs;
 CREATE INDEX pvl_params_of_confentities_idx ON configurations_parameters_values__leafs(parameter_id)       TABLESPACE tabsp_<<$db_name$>>_<<$app_name$>>_idxs;
@@ -345,8 +358,8 @@ For the second case to be possible, field "overload_default_link_usage" value mu
 Indirect reference on subconfiguration may be also used in the table with values of parameters.
 ';
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE configurations_parameters__subconfigs TO user_<<$app_name$>>_data_admin;
-GRANT SELECT                         ON TABLE configurations_parameters__subconfigs TO user_<<$app_name$>>_data_reader;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE configurations_parameters__subconfigs TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
+GRANT SELECT                         ON TABLE configurations_parameters__subconfigs TO user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
 CREATE UNIQUE INDEX          cp_s_ilref_base_uidx ON configurations_parameters__subconfigs(confentity_code_id, parameter_id, subconfentity_code_id)
                                                                                                                TABLESPACE tabsp_<<$db_name$>>_<<$app_name$>>_idxs;
@@ -379,8 +392,8 @@ CREATE TABLE configurations_parameters_values__subconfigs (
                     ON DELETE RESTRICT ON UPDATE CASCADE
 ) TABLESPACE tabsp_<<$db_name$>>_<<$app_name$>>;
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE configurations_parameters_values__subconfigs TO user_<<$app_name$>>_data_admin;
-GRANT SELECT                         ON TABLE configurations_parameters_values__subconfigs TO user_<<$app_name$>>_data_reader;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE configurations_parameters_values__subconfigs TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
+GRANT SELECT                         ON TABLE configurations_parameters_values__subconfigs TO user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
 CREATE        INDEX pvs_confentities_of_params_idx ON configurations_parameters_values__subconfigs(confentity_code_id) TABLESPACE tabsp_<<$db_name$>>_<<$app_name$>>_idxs;
 CREATE        INDEX pvs_params_of_confentities_idx ON configurations_parameters_values__subconfigs(parameter_id)       TABLESPACE tabsp_<<$db_name$>>_<<$app_name$>>_idxs;
@@ -394,232 +407,13 @@ For the second case to be possible, field "subconfiguration_link_usage" value mu
 Indirect reference on subconfiguration may be also used in the table with instaniation of parameters.
 ';
 
+\echo NOTICE >>>>> structure.init.sql [END]
+
 -------------------------------------------------------------------------------
 -------------------------------------------------------------------------------
--------------------------------------------------------------------------------
+
+-- Sometimes we want to insert some data, before creating triggers.
 
 \i functions.init.sql
 \i ../data/data.init.sql
-
--------------------------------------------------------------------------------
--------------------------------------------------------------------------------
--------------------------------------------------------------------------------
--- Triggers:
-
--- now selfreferring configs will be deletable
-CREATE OR REPLACE FUNCTION confentity_ondelete() RETURNS trigger AS $confentity_ondelete$ -- before delete
-BEGIN
-        DELETE FROM sch_<<$app_name$>>.configurations_parameters WHERE confentity_code_id = OLD.confentity_code_id;
-        RETURN OLD;
-END;
-$confentity_ondelete$ LANGUAGE plpgsql;
-
-CREATE TRIGGER tri_a_confentity_ondelete BEFORE DELETE ON sch_<<$app_name$>>.configurable_entities
-    FOR EACH ROW EXECUTE PROCEDURE confentity_ondelete();
-
--------------------------------------------------------------------------------
--------------------------------------------------------------------------------
-
-CREATE OR REPLACE FUNCTION cfgunit_oncredel() RETURNS trigger AS $cfgunit_oncredel$ -- ins, del
-DECLARE
-        entity_name    varchar;
-        instance_id    varchar;
-        operation_verb varchar;
-        the_row RECORD;
-BEGIN
-           IF TG_OP = 'INSERT' THEN the_row:= NEW; operation_verb:= 'CREATED';
-        ELSIF TG_OP = 'DELETE' THEN the_row:= OLD; operation_verb:= 'DELETED';
-        ELSE RAISE EXCEPTION 'Error in the "cfgunit_oncredel" TRIGGER function! Unsupported triggerring operation: "%".', TG_OP;
-        END IF;
-
-        IF NOT sch_<<$app_name$>>.read_cfgmngsys_setup__output_credel_notices() THEN RETURN the_row; END IF;
-
-        CASE TG_TABLE_NAME
-            WHEN 'configurable_entities' THEN
-                entity_name:= 'Configurable entity';
-                instance_id:= '(ce_id: ' || the_row.confentity_code_id || ')';
-            WHEN 'configurations' THEN
-                entity_name:= 'Configuration';
-                instance_id:= '(ce_id: ' || the_row.confentity_code_id || '; cfg_id: "' || the_row.configuration_id || '")';
-            WHEN 'configurations_parameters__leafs' THEN
-                entity_name:= 'Configuration leaf-parameter';
-                instance_id:= '(ce_id: ' || the_row.confentity_code_id || '; param_id: "' || the_row.parameter_id || '")';
-            WHEN 'configurations_parameters' THEN
-                entity_name:= 'Configuration parameter (abstract)';
-                instance_id:= '(ce_id: ' || the_row.confentity_code_id || '; param_id: "' || the_row.parameter_id || '")';
-            WHEN 'configurations_parameters_values__leafs' THEN
-                entity_name:= 'Configuration leaf-parameter value';
-                instance_id:= '(ce_id: ' || the_row.confentity_code_id || '; cfg_id: "' || the_row.configuration_id || '"; param_id: "' || the_row.parameter_id || '")';
-            WHEN 'configurations_parameters__subconfigs' THEN
-                entity_name:= 'Configuration subconfig-parameter';
-                instance_id:= '(ce_id: ' || the_row.confentity_code_id || '; param_id: "' || the_row.parameter_id || '")';
-            WHEN 'configurations_parameters_values__subconfigs' THEN
-                entity_name:= 'Configuration subconfig-parameter value';
-                instance_id:= '(ce_id: ' || the_row.confentity_code_id || '; cfg_id: "' || the_row.configuration_id || '"; param_id: "' || the_row.parameter_id || '")';
-            ELSE RAISE EXCEPTION 'Error in the "cfgunit_oncredel" TRIGGER function! Unsupported table: "%".', TG_TABLE_NAME;
-        END CASE;
-
-        RAISE NOTICE '**> % %: %.', operation_verb, entity_name, instance_id;
-
-        RETURN the_row;
-END;
-$cfgunit_oncredel$ LANGUAGE plpgsql;
-
-CREATE TRIGGER tri_z_confentity_oncredel       AFTER INSERT OR DELETE ON configurable_entities
-    FOR EACH ROW EXECUTE PROCEDURE cfgunit_oncredel();
-CREATE TRIGGER tri_z_config_oncredel           AFTER INSERT OR DELETE ON configurations
-    FOR EACH ROW EXECUTE PROCEDURE cfgunit_oncredel();
-CREATE TRIGGER tri_z_confparam_oncredel        AFTER INSERT OR DELETE ON configurations_parameters
-    FOR EACH ROW EXECUTE PROCEDURE cfgunit_oncredel();
-CREATE TRIGGER tri_z_confparam_l_oncredel      AFTER INSERT OR DELETE ON configurations_parameters__leafs
-    FOR EACH ROW EXECUTE PROCEDURE cfgunit_oncredel();
-CREATE TRIGGER tri_z_confparamvalue_l_oncredel AFTER INSERT OR DELETE ON configurations_parameters_values__leafs
-    FOR EACH ROW EXECUTE PROCEDURE cfgunit_oncredel();
-CREATE TRIGGER tri_z_confparam_s_oncredel      AFTER INSERT OR DELETE ON configurations_parameters__subconfigs
-    FOR EACH ROW EXECUTE PROCEDURE cfgunit_oncredel();
-CREATE TRIGGER tri_z_confparamvalue_s_oncredel AFTER INSERT OR DELETE ON configurations_parameters_values__subconfigs
-    FOR EACH ROW EXECUTE PROCEDURE cfgunit_oncredel();
-
--------------------------------------------------------------------------------
--------------------------------------------------------------------------------
-
-CREATE OR REPLACE FUNCTION confentity_domain_onmonify() RETURNS trigger AS $confentity_domain_onmonify$ -- upd
-DECLARE
-        o_ce_id integer;
-        n_ce_id integer;
-        recheck_completeness boolean := FALSE;
-        new_completeness sch_<<$app_name$>>.t_config_completeness_check_result;
-        dep_cts          sch_<<$app_name$>>.t_configs_tree_rel[];
-        exclud_cfg       sch_<<$app_name$>>.t_config_key;
-
-        namespace_info   sch_<<$app_name$>>.t_namespace_info;
-BEGIN
-        IF TG_OP NOT IN ('INSERT', 'DELETE', 'UPDATE') THEN
-                RAISE EXCEPTION 'Error in the "confentity_domain_onmonify" TRIGGER function! Unsupported triggerring operation: "%".', TG_OP;
-        END IF;
-
-        CASE sch_<<$app_name$>>.read_cfgmngsys_setup__perform_completness_routines()
-            WHEN TRUE  THEN -- ok
-            WHEN FALSE THEN
-                CASE TG_OP
-                    WHEN 'INSERT' THEN
-                        RETURN NEW;
-                    WHEN 'UPDATE' THEN
-                        RETURN NEW;
-                    WHEN 'DELETE' THEN
-                        RETURN OLD;
-                END CASE;
-        END CASE;
-
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
-        exclud_cfg:= make_configkey_null();
-        dep_cts:= ARRAY[] :: t_configs_tree_rel[];
-
-        CASE TG_TABLE_NAME
-            WHEN 'configurable_entities' THEN
-                CASE TG_OP
-                    WHEN 'INSERT' THEN
-                        -- nothing to be done
-                    WHEN 'UPDATE' THEN
-                        IF (NEW.default_configuration_id IS DISTINCT FROM OLD.default_configuration_id) THEN
-                                dep_cts:= configs_that_rely_on_confentity_default(NEW.confentity_code_id, TRUE, FALSE)
-                                       || configs_that_rely_on_confentity_default(OLD.confentity_code_id, TRUE, FALSE);
-                        END IF;
-                    WHEN 'DELETE' THEN
-                        -- nothing to be done
-                END CASE;
-
-            WHEN 'configurations' THEN
-                CASE TG_OP
-                    WHEN 'INSERT' THEN
-                        recheck_completeness:= TRUE;
-                        dep_cts:= configs_that_use_subconfig(make_configkey_bystr(NEW.confentity_code_id, NEW.configuration_id), TRUE, FALSE);
-                    WHEN 'UPDATE' THEN
-                        recheck_completeness:= TRUE;
-                        IF    (NEW.configuration_id   IS DISTINCT FROM OLD.configuration_id)
-                           OR (NEW.confentity_code_id IS DISTINCT FROM OLD.confentity_code_id)
-                           OR (completeness_interpretation(NEW.complete_isit) IS DISTINCT FROM completeness_interpretation(OLD.complete_isit))
-                        THEN
-                                dep_cts:= configs_that_use_subconfig(make_configkey_bystr(NEW.confentity_code_id, NEW.configuration_id), TRUE, FALSE)
-                                       || configs_that_use_subconfig(make_configkey_bystr(OLD.confentity_code_id, OLD.configuration_id), TRUE, FALSE);
-                                IF completeness_interpretation(OLD.complete_isit) IS DISTINCT FROM TRUE THEN
-                                        exclud_cfg:= make_configkey_bystr(NEW.confentity_code_id, NEW.configuration_id);
-                                END IF;
-                        END IF;
-                    WHEN 'DELETE' THEN
-                        dep_cts:= configs_that_use_subconfig(make_configkey_bystr(OLD.confentity_code_id, OLD.configuration_id), TRUE, FALSE);
-                END CASE;
-            WHEN 'configurations_parameters', 'configurations_parameters__subconfigs', 'configurations_parameters__leafs' THEN
-                CASE TG_OP
-                    WHEN 'INSERT' THEN
-                        dep_cts:= configs_related_with_confentity(NEW.confentity_code_id, TRUE, FALSE);
-                    WHEN 'UPDATE' THEN
-                        dep_cts:= configs_related_with_confentity(NEW.confentity_code_id, TRUE, FALSE)
-                               || configs_related_with_confentity(OLD.confentity_code_id, TRUE, FALSE);
-                    WHEN 'DELETE' THEN
-                        dep_cts:= configs_related_with_confentity(OLD.confentity_code_id, TRUE, FALSE);
-                END CASE;
-            WHEN 'configurations_parameters_values__subconfigs', 'configurations_parameters_values__leafs' THEN
-                CASE TG_OP
-                    WHEN 'INSERT' THEN
-                        dep_cts:= configs_that_use_subconfig(make_configkey_bystr(NEW.confentity_code_id, NEW.configuration_id), TRUE, FALSE);
-                    WHEN 'UPDATE' THEN
-                        dep_cts:= configs_that_use_subconfig(make_configkey_bystr(OLD.confentity_code_id, OLD.configuration_id), TRUE, FALSE);
-                        IF    (NEW.configuration_id   IS DISTINCT FROM OLD.configuration_id)
-                           OR (NEW.confentity_code_id IS DISTINCT FROM OLD.confentity_code_id)
-                        THEN
-                                dep_cts:= dep_cts || configs_that_use_subconfig(make_configkey_bystr(NEW.confentity_code_id, NEW.configuration_id), TRUE, FALSE);
-                        END IF;
-                    WHEN 'DELETE' THEN
-                        dep_cts:= configs_that_use_subconfig(make_configkey_bystr(OLD.confentity_code_id, OLD.configuration_id), TRUE, FALSE);
-                END CASE;
-            ELSE RAISE EXCEPTION 'Error in the "confentity_domain_onmonify" TRIGGER function! Unsupported table: "%".', TG_TABLE_NAME;
-        END CASE;
-
-        PERFORM update_cfgs_ondepmodify(dep_cts, exclud_cfg);
-
-        IF recheck_completeness THEN -- bad style
-                SELECT complete_isit
-                INTO new_completeness
-                FROM configurations AS c
-                WHERE NEW.configuration_id   = c.configuration_id
-                  AND NEW.confentity_code_id = c.confentity_code_id;
-
-                NEW.complete_isit:= new_completeness;
-        END IF;
-
-        PERFORM leave_schema_namespace(namespace_info);
-        CASE TG_OP
-            WHEN 'INSERT' THEN
-                RETURN NEW;
-            WHEN 'UPDATE' THEN
-                RETURN NEW;
-            WHEN 'DELETE' THEN
-                RETURN OLD;
-        END CASE;
-END;
-$confentity_domain_onmonify$ LANGUAGE plpgsql;
-
-CREATE TRIGGER tri_confentity_onmodify       AFTER INSERT OR UPDATE OR DELETE ON configurable_entities
-    FOR EACH ROW EXECUTE PROCEDURE confentity_domain_onmonify();
-CREATE TRIGGER tri_config_onmodify           AFTER INSERT OR UPDATE OR DELETE ON configurations
-    FOR EACH ROW EXECUTE PROCEDURE confentity_domain_onmonify();
-CREATE TRIGGER tri_confparam_onmodify        AFTER INSERT OR UPDATE OR DELETE ON configurations_parameters
-    FOR EACH ROW EXECUTE PROCEDURE confentity_domain_onmonify();
-CREATE TRIGGER tri_confparam_l_onmodify      AFTER INSERT OR UPDATE OR DELETE ON configurations_parameters__leafs
-    FOR EACH ROW EXECUTE PROCEDURE confentity_domain_onmonify();
-CREATE TRIGGER tri_confparamvalue_l_onmodify AFTER INSERT OR UPDATE OR DELETE ON configurations_parameters_values__leafs
-    FOR EACH ROW EXECUTE PROCEDURE confentity_domain_onmonify();
-CREATE TRIGGER tri_confparam_s_onmodify      AFTER INSERT OR UPDATE OR DELETE ON configurations_parameters__subconfigs
-    FOR EACH ROW EXECUTE PROCEDURE confentity_domain_onmonify();
-CREATE TRIGGER tri_confparamvalue_s_onmodify AFTER INSERT OR UPDATE OR DELETE ON configurations_parameters_values__subconfigs
-    FOR EACH ROW EXECUTE PROCEDURE confentity_domain_onmonify();
-
-------------------
-
--- CREATE ...
--- GRANT ...
-
--- CREATE TRIGGER ...
-
+\i triggers.init.sql

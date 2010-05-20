@@ -7,6 +7,11 @@
 --------------------------------------------------------------------------
 --------------------------------------------------------------------------
 
+\echo NOTICE >>>>> confentity.drop.sql [BEGIN]
+
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+
 -- Reference functions:
 DROP FUNCTION IF EXISTS make_confentitykey(par_confentity_key t_code_key_by_lng);
 DROP FUNCTION IF EXISTS make_confentitykey_null();
@@ -67,3 +72,8 @@ DROP FUNCTION IF EXISTS delete_confentity(
 DROP TYPE IF EXISTS t_confentity_key;
 DROP TYPE IF EXISTS t_confentity_param_wdelstats__short;
 DROP TYPE IF EXISTS t_cfg_wdelstats__short;
+
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+
+\echo NOTICE >>>>> confentity.drop.sql [END]

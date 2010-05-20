@@ -7,6 +7,11 @@
 --------------------------------------------------------------------------
 --------------------------------------------------------------------------
 
+\echo NOTICE >>>>> config.init.sql [BEGIN]
+
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+
 CREATE TYPE t_config_key AS (confentity_key t_confentity_key, config_id varchar, cfgid_is_lnged boolean);
 
 COMMENT ON TYPE t_config_key IS
@@ -21,19 +26,19 @@ Many functions will raise exception, if value of "cfgid_is_lnged" is NULL.
 
 CREATE OR REPLACE FUNCTION make_configkey(par_confentity_key t_confentity_key, par_config varchar, par_cfgid_is_lnged boolean) RETURNS t_config_key AS $$
         SELECT ROW($1, $2, $3) :: sch_<<$app_name$>>.t_config_key;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION make_configkey_null() RETURNS t_config_key AS $$
         SELECT ROW(sch_<<$app_name$>>.make_confentitykey_null(), NULL :: varchar, NULL :: boolean) :: sch_<<$app_name$>>.t_config_key;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION make_configkey_bystr(par_confentity_id integer, par_config varchar) RETURNS t_config_key AS $$
         SELECT ROW(sch_<<$app_name$>>.make_confentitykey_byid($1), $2, FALSE) :: sch_<<$app_name$>>.t_config_key;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION make_configkey_bystr2(par_confentity_str varchar, par_config varchar) RETURNS t_config_key AS $$
         SELECT ROW(sch_<<$app_name$>>.make_confentitykey_bystr($1), $2, FALSE) :: sch_<<$app_name$>>.t_config_key;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 --------------
 
@@ -46,11 +51,11 @@ CREATE OR REPLACE FUNCTION config_is_null(par_config_key t_config_key, par_total
                           END
                          )
                END;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION config_is_null(par_config_key t_config_key) RETURNS boolean AS $$
         SELECT sch_<<$app_name$>>.config_is_null($1, FALSE);
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 --------------
 
@@ -72,11 +77,13 @@ CREATE OR REPLACE FUNCTION show_configkey(par_configkey t_config_key) RETURNS va
                       END
                )
             || '}';
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 ------------------------
 
-CREATE OR REPLACE FUNCTION show_configkeys_list(par_configkeys_list t_config_key[]) RETURNS varchar AS $$
+CREATE OR REPLACE FUNCTION show_configkeys_list(par_configkeys_list t_config_key[]) RETURNS varchar
+LANGUAGE plpgsql IMMUTABLE
+AS $$
 DECLARE r varchar; i integer; l integer;
 BEGIN
         l:= array_length(par_configkeys_list, 1); i:= 0;
@@ -89,7 +96,7 @@ BEGIN
         r:= r || '}';
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION show_configkeys_list(par_configkeys_list t_config_key[]) IS '
 It is assumed, that target list contains all *optimized* keys - ones containing determined "confentity_code_id" and delanguaged "config_id" !!
@@ -98,7 +105,9 @@ If list contains "NULL :: t_config_key" (or "make_configkey_null()"), the whole 
 
 --------------
 
-CREATE OR REPLACE FUNCTION optimized_configkey_isit(par_configkey t_config_key) RETURNS boolean AS $$
+CREATE OR REPLACE FUNCTION optimized_configkey_isit(par_configkey t_config_key) RETURNS boolean
+LANGUAGE plpgsql IMMUTABLE
+AS $$
 DECLARE r boolean;
 BEGIN
         IF par_configkey.cfgid_is_lnged IS NULL THEN
@@ -110,23 +119,23 @@ BEGIN
         INTO r;
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 --------------
 
-CREATE OR REPLACE FUNCTION optimize_configkey(par_configkey t_config_key, par_verify boolean) RETURNS t_config_key AS $$
+CREATE OR REPLACE FUNCTION optimize_configkey(par_configkey t_config_key, par_verify boolean) RETURNS t_config_key
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g sch_<<$app_name$>>.t_confentity_key;
         n varchar;
         r sch_<<$app_name$>>.t_config_key;
         rows_count integer;
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
         IF sch_<<$app_name$>>.optimized_configkey_isit(par_configkey) AND NOT par_verify THEN
                 RETURN par_configkey;
         END IF;
-
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
 
         g:= optimize_confentitykey(FALSE, par_configkey.confentity_key);
 
@@ -163,10 +172,9 @@ BEGIN
         END IF;
         r:= make_configkey(g, n, FALSE);
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 CREATE OR REPLACE FUNCTION optimize_configkey(par_configkey t_config_key) RETURNS t_config_key AS $$
         SELECT sch_<<$app_name$>>.optimize_configkey($1, FALSE);
@@ -177,7 +185,9 @@ COMMENT ON FUNCTION optimize_configkey(par_configkey t_config_key) IS
 
 -------------
 
-CREATE OR REPLACE FUNCTION is_confentity_default(par_configkey t_config_key) RETURNS boolean AS $$
+CREATE OR REPLACE FUNCTION is_confentity_default(par_configkey t_config_key) RETURNS boolean
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g sch_<<$app_name$>>.t_config_key;
         r boolean;
@@ -188,7 +198,7 @@ BEGIN
             );
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION is_confentity_default(par_configkey t_config_key) IS
 'It is advised to do the "optimize_configkey(par_configkey)" beforehand, if par_configkey is to be reused.
@@ -197,14 +207,14 @@ Raises an exception, if confentity is not optimized and isn''t found, but return
 
 -------------
 
-CREATE OR REPLACE FUNCTION read_completeness(par_configkey t_config_key) RETURNS t_config_completeness_check_result AS $$
+CREATE OR REPLACE FUNCTION read_completeness(par_configkey t_config_key) RETURNS t_config_completeness_check_result
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g sch_<<$app_name$>>.t_config_key;
         r sch_<<$app_name$>>.t_config_completeness_check_result:= NULL;
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         g:= optimize_configkey(par_configkey, FALSE);
 
         SELECT complete_isit
@@ -215,10 +225,9 @@ BEGIN
 
         IF r IS NULL THEN r:= 'nf_X'; END IF;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION is_confentity_default(par_configkey t_config_key) IS
 'It is advised to do the "optimize_configkey(par_configkey)" beforehand, if par_configkey is to be reused.
@@ -227,14 +236,14 @@ Raises an exception, if confentity is not optimized and isn''t found, but return
 
 -------------
 
-CREATE OR REPLACE FUNCTION read_role__completeness_as_regulator(par_configkey t_config_key) RETURNS t_completeness_as_regulator AS $$
+CREATE OR REPLACE FUNCTION read_role__completeness_as_regulator(par_configkey t_config_key) RETURNS t_completeness_as_regulator
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g sch_<<$app_name$>>.t_config_key;
         r sch_<<$app_name$>>.t_completeness_as_regulator:= NULL;
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         g:= optimize_configkey(par_configkey, FALSE);
 
         SELECT completeness_as_regulator
@@ -243,10 +252,9 @@ BEGIN
         WHERE c.confentity_code_id = code_id_of_confentitykey(g.confentity_key)
           AND c.configuration_id   = g.config_id;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION read_role__completeness_as_regulator(par_configkey t_config_key) IS
 'It is advised to do the "optimize_configkey(par_configkey)" beforehand, if par_configkey is to be reused.
@@ -261,17 +269,16 @@ CREATE OR REPLACE FUNCTION new_config(
                 par_ifdoesnt_exist  boolean
               , par_confentity_key  t_confentity_key
               , par_config_id       varchar
-              ) RETURNS integer AS $$
+              ) RETURNS integer
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         target_confentity_id integer;
         rows_count integer;
         c_exists boolean;
         cfg sch_<<$app_name$>>.t_config_key;
-
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         target_confentity_id:= code_id_of_confentitykey(optimize_confentitykey(FALSE, par_confentity_key));
 
         c_exists:= FALSE;
@@ -293,10 +300,9 @@ BEGIN
         ELSE    rows_count:= 0;
         END IF;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN rows_count;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION new_config(
                 par_ifdoesnt_exist  boolean
@@ -311,7 +317,10 @@ If "par_ifdoesnt_exist" is FALSE and config already exists, then exception is ra
 CREATE OR REPLACE FUNCTION add_config_names(
                   par_config_key t_config_key
                 , par_names      name_construction_input[]
-                ) RETURNS integer AS $$
+                ) RETURNS integer
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g sch_<<$app_name$>>.t_config_key;
         target_confentity_id integer;
@@ -319,10 +328,7 @@ DECLARE
         cnt1 integer;
         cnt2 integer;
         dflt_lng_c_id integer;
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         g:= optimize_configkey(par_config_key, FALSE);
         target_confentity_id:= code_id_of_confentitykey(g.confentity_key);
         taget_config_id:= g.config_id;
@@ -370,10 +376,9 @@ BEGIN
                       ) AS v;
         GET DIAGNOSTICS cnt2 = ROW_COUNT;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN (cnt1 + cnt2);
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION add_config_names(
                   par_config_key t_config_key
@@ -383,19 +388,18 @@ COMMENT ON FUNCTION add_config_names(
 
 --------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION clone_config(par_config_key t_config_key, par_clone_config_id varchar) RETURNS integer AS $$
+CREATE OR REPLACE FUNCTION clone_config(par_config_key t_config_key, par_clone_config_id varchar) RETURNS integer
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         target_confentity_id integer;
         rows_count integer;
         rows_count_add integer;
         compl sch_<<$app_name$>>.t_config_completeness_check_result;
-        occa sch_<<$app_name$>>.t_completeness_as_regulator;
-        g sch_<<$app_name$>>.t_config_key;
-
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
+        occa  sch_<<$app_name$>>.t_completeness_as_regulator;
+        g     sch_<<$app_name$>>.t_config_key;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         g:= optimize_configkey(par_config_key, FALSE);
         target_confentity_id:= code_id_of_confentitykey(g.confentity_key);
 
@@ -433,10 +437,9 @@ BEGIN
         WHERE c.confentity_code_id = target_confentity_id
           AND c.configuration_id   = par_clone_config_id;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN rows_count;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION clone_config(par_config_key t_config_key, par_clone_config_id varchar) IS
 'Returns count of rows inserted (including rows in parameter-values tables).
@@ -447,7 +450,9 @@ The "par_clone_config_id" parameter is not languaged.
 
 --------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION set_confentity_default(par_config_key t_config_key, par_overwrite boolean) RETURNS integer AS $$
+CREATE OR REPLACE FUNCTION set_confentity_default(par_config_key t_config_key, par_overwrite boolean) RETURNS integer
+LANGUAGE plpgsql
+AS $$
 DECLARE g sch_<<$app_name$>>.t_config_key;
         rows_count integer;
 BEGIN
@@ -461,7 +466,7 @@ BEGIN
         GET DIAGNOSTICS rows_count = ROW_COUNT;
         RETURN rows_count;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION set_confentity_default(par_config_key t_config_key, par_overwrite boolean) IS
 'Returns count of rows modified.
@@ -481,7 +486,10 @@ CREATE OR REPLACE FUNCTION delete_config(
               , par_warn_with_list_of_param_dflt_users boolean
               , par_warn_with_list_of_param_val_users  boolean
               , par_dont_modify_anything               boolean
-              ) RETURNS integer AS $$
+              ) RETURNS integer
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g sch_<<$app_name$>>.t_config_key;
 
@@ -499,11 +507,7 @@ DECLARE
         ce_dflt_pers     boolean;
         param_dflt_lst   sch_<<$app_name$>>.t_confentity_param__short[];
         param_val_lst    sch_<<$app_name$>>.t_config_param_subcfg__short[];
-
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         g:= optimize_configkey(par_config_key, FALSE);
         target_ce_id := code_id_of_confentitykey(g.confentity_key);
         target_cfg_id:= g.config_id;
@@ -578,7 +582,6 @@ BEGIN
 
                 GET DIAGNOSTICS rows_count_add = ROW_COUNT;
                 rows_count_accum:= rows_count_accum + rows_count_add;
-        ELSE
         END IF;
 
         IF par_cascade_setnull_param_val AND par_warn_with_list_of_param_val_users AND NOT par_dont_modify_anything THEN
@@ -612,10 +615,9 @@ BEGIN
                 rows_count_accum:= rows_count_accum + rows_count_add;
         END IF;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN rows_count_accum;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION delete_config(
                 par_config_key t_config_key
@@ -641,32 +643,32 @@ The function parmeters with "par_warn_with_*"       prefix -> outputs warning wi
 -- GRANTS
 
 -- Reference functions:
-GRANT EXECUTE ON FUNCTION make_configkey(par_confentity_key t_confentity_key, par_config varchar, par_cfgid_is_lnged boolean)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION make_configkey_null()TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION make_configkey_bystr(par_confentity_id integer, par_config varchar)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION make_configkey_bystr2(par_confentity_str varchar, par_config varchar)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION config_is_null(par_config_key t_config_key, par_total boolean)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION config_is_null(par_config_key t_config_key)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION show_configkey(par_configkey t_config_key)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION show_configkeys_list(par_configkeys_list t_config_key[])TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION optimized_configkey_isit(par_configkey t_config_key)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION make_configkey(par_confentity_key t_confentity_key, par_config varchar, par_cfgid_is_lnged boolean)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION make_configkey_null()TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION make_configkey_bystr(par_confentity_id integer, par_config varchar)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION make_configkey_bystr2(par_confentity_str varchar, par_config varchar)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION config_is_null(par_config_key t_config_key, par_total boolean)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION config_is_null(par_config_key t_config_key)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION show_configkey(par_configkey t_config_key)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION show_configkeys_list(par_configkeys_list t_config_key[])TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION optimized_configkey_isit(par_configkey t_config_key)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
 -- Lookup functions:
-GRANT EXECUTE ON FUNCTION optimize_configkey(par_configkey t_config_key, par_verify boolean)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION optimize_configkey(par_configkey t_config_key)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION is_confentity_default(par_configkey t_config_key)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION read_completeness(par_configkey t_config_key)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION read_role__completeness_as_regulator(par_configkey t_config_key)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION optimize_configkey(par_configkey t_config_key, par_verify boolean)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION optimize_configkey(par_configkey t_config_key)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION is_confentity_default(par_configkey t_config_key)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION read_completeness(par_configkey t_config_key)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION read_role__completeness_as_regulator(par_configkey t_config_key)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
 -- Administration functions:
 GRANT EXECUTE ON FUNCTION new_config(
                 par_ifdoesnt_exist  boolean
               , par_confentity_key  t_confentity_key
               , par_config_id       varchar
-              ) TO user_<<$app_name$>>_data_admin;
-GRANT EXECUTE ON FUNCTION add_config_names(par_config_key t_config_key, par_names name_construction_input[]) TO user_<<$app_name$>>_data_admin;
-GRANT EXECUTE ON FUNCTION clone_config(par_config_key t_config_key, par_clone_config_id varchar) TO user_<<$app_name$>>_data_admin;
-GRANT EXECUTE ON FUNCTION set_confentity_default(par_config_key t_config_key, par_overwrite boolean) TO user_<<$app_name$>>_data_admin;
+              ) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
+GRANT EXECUTE ON FUNCTION add_config_names(par_config_key t_config_key, par_names name_construction_input[]) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
+GRANT EXECUTE ON FUNCTION clone_config(par_config_key t_config_key, par_clone_config_id varchar) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
+GRANT EXECUTE ON FUNCTION set_confentity_default(par_config_key t_config_key, par_overwrite boolean) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
 GRANT EXECUTE ON FUNCTION delete_config( par_config_key t_config_key
              , par_cascade_setnull_ce_dflt            boolean
              , par_cascade_setnull_param_dflt         boolean
@@ -675,4 +677,9 @@ GRANT EXECUTE ON FUNCTION delete_config( par_config_key t_config_key
              , par_warn_with_list_of_param_dflt_users boolean
              , par_warn_with_list_of_param_val_users  boolean
              , par_dont_modify_anything               boolean
-             )TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+             )TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+
+\echo NOTICE >>>>> config.init.sql [END]

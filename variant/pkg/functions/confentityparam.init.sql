@@ -7,6 +7,11 @@
 --------------------------------------------------------------------------
 --------------------------------------------------------------------------
 
+\echo NOTICE >>>>> confentityparam.init.sql [BEGIN]
+
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+
 CREATE TYPE t_cpvalue_uni AS (
           type                t_confparam_type
         , value               varchar
@@ -16,11 +21,11 @@ CREATE TYPE t_cpvalue_uni AS (
 
 CREATE OR REPLACE FUNCTION mk_cpvalue_null() RETURNS t_cpvalue_uni AS $$
         SELECT ROW(NULL :: t_confparam_type, NULL :: varchar, NULL :: varchar, NULL :: varchar) :: sch_<<$app_name$>>.t_cpvalue_uni;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION mk_cpvalue_l(value varchar) RETURNS t_cpvalue_uni AS $$
         SELECT ROW('leaf' :: t_confparam_type, $1, NULL :: varchar, NULL :: varchar) :: sch_<<$app_name$>>.t_cpvalue_uni;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION mk_cpvalue_s(
           value               varchar
@@ -28,7 +33,7 @@ CREATE OR REPLACE FUNCTION mk_cpvalue_s(
         , subcfg_ref_usage    t_subconfig_value_linking_read_rule
         ) RETURNS t_cpvalue_uni AS $$
         SELECT ROW('subconfig' :: t_confparam_type, $1, $2, $3) :: sch_<<$app_name$>>.t_cpvalue_uni;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION isconsistent_cpvalue(par_value t_cpvalue_uni) RETURNS boolean AS $$
         SELECT CASE $1 IS NULL
@@ -38,7 +43,7 @@ CREATE OR REPLACE FUNCTION isconsistent_cpvalue(par_value t_cpvalue_uni) RETURNS
                             ELSE ($1.type IS DISTINCT FROM 'subconfig') OR ($1.subcfg_ref_usage IS NOT NULL)
                         END
                END
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION isdefined_cpvalue(par_value t_cpvalue_uni) RETURNS boolean AS $$
         SELECT CASE $1 IS NULL
@@ -54,7 +59,7 @@ CREATE OR REPLACE FUNCTION isdefined_cpvalue(par_value t_cpvalue_uni) RETURNS bo
                                  END
                         END
                END
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION isnull_cpvalue(
           par_value t_cpvalue_uni
@@ -68,7 +73,7 @@ CREATE OR REPLACE FUNCTION isnull_cpvalue(
                             ELSE NOT (sch_<<$app_name$>>.isconsistent_cpvalue($1) AND sch_<<$app_name$>>.isdefined_cpvalue($1))
                         END
                END
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 --------------------------------------------------------------------------
 
@@ -109,7 +114,7 @@ BEGIN
                ) :: sch_<<$app_name$>>.t_cparameter_uni;
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql IMMUTABLE;
 
 --------------------------------------------------------------------------
 
@@ -123,19 +128,19 @@ COMMENT ON TYPE t_confentityparam_key IS
 
 CREATE OR REPLACE FUNCTION make_confentityparamkey(par_confentity_key t_confentity_key, key varchar, key_is_lnged boolean) RETURNS t_confentityparam_key AS $$
         SELECT ROW($1, $2, $3) :: sch_<<$app_name$>>.t_confentityparam_key;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION make_confentityparamkey_null() RETURNS t_confentityparam_key AS $$
         SELECT ROW(sch_<<$app_name$>>.make_confentitykey_null(), NULL :: varchar, NULL :: varchar) :: sch_<<$app_name$>>.t_confentityparam_key;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION make_confentityparamkey_bystr(par_confentity_id integer, par_param varchar) RETURNS t_confentityparam_key AS $$
         SELECT ROW(sch_<<$app_name$>>.make_confentitykey_byid($1), $2, FALSE) :: sch_<<$app_name$>>.t_confentityparam_key;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION make_confentityparamkey_bystr2(par_confentity_str varchar, par_param varchar) RETURNS t_confentityparam_key AS $$
         SELECT ROW(sch_<<$app_name$>>.make_confentitykey_bystr($1), $2, FALSE) :: sch_<<$app_name$>>.t_confentityparam_key;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 --------------
 
@@ -148,7 +153,7 @@ CREATE OR REPLACE FUNCTION confentityparam_is_null(par_confparam_key t_confentit
                                  sch_<<$app_name$>>.confentity_is_null(($1).confentity_key) OR  (($1).param_key IS NULL) OR (($1).param_key_is_lnged IS NULL)
                          END
                END;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 --------------
 
@@ -170,11 +175,13 @@ CREATE OR REPLACE FUNCTION show_confentityparamkey(par_confparam_key t_confentit
                       END
                )
             || '}';
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 --------------
 
-CREATE OR REPLACE FUNCTION optimized_confentityparamkey_isit(par_confparam_key t_confentityparam_key) RETURNS boolean AS $$
+CREATE OR REPLACE FUNCTION optimized_confentityparamkey_isit(par_confparam_key t_confentityparam_key) RETURNS boolean
+LANGUAGE plpgsql IMMUTABLE
+AS $$
 DECLARE r boolean;
 BEGIN
         IF par_confparam_key.param_key_is_lnged IS NULL THEN
@@ -190,24 +197,24 @@ BEGIN
         INTO r;
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 --------------
 
-CREATE OR REPLACE FUNCTION optimize_confentityparamkey(par_confparam_key t_confentityparam_key, par_verify boolean) RETURNS t_confentityparam_key AS $$
+CREATE OR REPLACE FUNCTION optimize_confentityparamkey(par_confparam_key t_confentityparam_key, par_verify boolean) RETURNS t_confentityparam_key
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g sch_<<$app_name$>>.t_confentity_key;
         n varchar;
         r sch_<<$app_name$>>.t_confentityparam_key;
         rows_count integer;
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
         -- if (par_confparam_key.param).key_is_lnged IS NULL the exception is rised!
         IF sch_<<$app_name$>>.optimized_confentityparamkey_isit(par_confparam_key) AND NOT par_verify THEN
                 RETURN par_confparam_key;
         END IF;
-
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
 
         g:= optimize_confentitykey(FALSE, par_confparam_key.confentity_key);
 
@@ -245,14 +252,16 @@ BEGIN
         END IF;
         r:= make_confentityparamkey(g, n, FALSE);
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 --------------
 
-CREATE OR REPLACE FUNCTION determine_cparameter(par_confparam_key t_confentityparam_key) RETURNS t_cparameter_uni AS $$
+CREATE OR REPLACE FUNCTION determine_cparameter(par_confparam_key t_confentityparam_key) RETURNS t_cparameter_uni
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g  sch_<<$app_name$>>.t_confentityparam_key;
         n  varchar;
@@ -261,10 +270,7 @@ DECLARE
         rec        RECORD;
         subce_id   integer;
         rows_count integer;
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         g:= optimize_confentityparamkey(par_confparam_key, FALSE);
 
         SELECT mk_cparameter_uni(
@@ -317,21 +323,20 @@ BEGIN
         r.default_value:= dv;
         r.subconfentity_code_id:= subce_id;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 ------------------
 
-CREATE OR REPLACE FUNCTION get_params(par_confentity_key t_confentity_key) RETURNS t_cparameter_uni[] AS $$
+CREATE OR REPLACE FUNCTION get_params(par_confentity_key t_confentity_key) RETURNS t_cparameter_uni[]
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g sch_<<$app_name$>>.t_confentity_key;
         r sch_<<$app_name$>>.t_cparameter_uni[];
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         g:= optimize_confentitykey(TRUE, par_confentity_key);
 
         r:= ARRAY(
@@ -374,17 +379,19 @@ BEGIN
                   AND cp_s.confentity_code_id = code_id_of_confentitykey(g)
         );
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 --------------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION add_confparam_names(
                   par_confparam_key t_confentityparam_key
                 , par_names         name_construction_input[]
-                ) RETURNS integer AS $$
+                ) RETURNS integer
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g  sch_<<$app_name$>>.t_confentityparam_key;
         g2 sch_<<$app_name$>>.t_cparameter_uni;
@@ -393,10 +400,7 @@ DECLARE
         cnt1 integer;
         cnt2 integer;
         dflt_lng_c_id integer;
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         g := optimize_confentityparamkey(par_confparam_key, TRUE);
         g2:= determine_cparameter(g);
         target_confentity_id:= code_id_of_confentitykey(g.confentity_key);
@@ -445,10 +449,9 @@ BEGIN
                       ) AS v;
         GET DIAGNOSTICS cnt2 = ROW_COUNT;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN (cnt1 + cnt2);
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION add_confparam_names(
                   par_confparam_key t_confentityparam_key
@@ -462,17 +465,17 @@ CREATE OR REPLACE FUNCTION new_confparam_abstract(
                   par_confentity_key t_confentity_key
                 , par_cparameter     t_cparameter_uni
                 , par_ifdoesntexist  boolean
-                ) RETURNS integer AS $$
+                ) RETURNS integer
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g sch_<<$app_name$>>.t_confentity_key;
         rows_count_add   integer;
         rows_count_accum integer;
         target_confentity_id integer;
         taget_param_name    varchar;
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         g:= optimize_confentitykey(FALSE, par_confentity_key);
         target_confentity_id:= code_id_of_confentitykey(g);
         taget_param_name   := par_cparameter.param_id;
@@ -512,10 +515,9 @@ BEGIN
                 RAISE EXCEPTION 'An error occurred in function "new_confparam" for key: %! Parameter aldeady exists!', par_cparameter;
         END IF;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN rows_count_accum;
 END;
-$$ LANGUAGE plpgsql;
+$$ ;
 
 COMMENT ON FUNCTION new_confparam_abstract(
                   par_confentity_key t_confentity_key
@@ -531,15 +533,16 @@ If "par_ifdoesntexist" is TRUE and parameter already exists, an exception gets r
 CREATE OR REPLACE FUNCTION instaniate_confparam_as_leaf(
                   par_confparam_key t_confentityparam_key
                 , par_default_value varchar
-                ) RETURNS integer AS $$
+                ) RETURNS integer
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g sch_<<$app_name$>>.t_confentityparam_key;
         target_confentity_id integer;
         taget_param_name    varchar;
         rows_count          integer;
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
         g:= optimize_confentityparamkey(par_confparam_key, FALSE);
         target_confentity_id:= code_id_of_confentitykey(g.confentity_key);
         taget_param_name   := g.param_key;
@@ -565,10 +568,9 @@ BEGIN
                , par_default_value
                );
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN 1;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION instaniate_confparam_as_leaf(par_confparam_key t_confentityparam_key, par_dflt_val varchar) IS
 'Returns count of rows inserted. Inserts row into "configurations_parameters__leafs" table.
@@ -582,17 +584,17 @@ CREATE OR REPLACE FUNCTION instaniate_confparam_as_subconfig(
           par_confparam_key         t_confentityparam_key
         , par_subconfentity_code_id integer
         , default_value             t_cpvalue_uni
-        ) RETURNS integer AS $$
+        ) RETURNS integer
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g sch_<<$app_name$>>.t_confentityparam_key;
         target_confentity_id integer;
         taget_param_name    varchar;
         rows_count          integer;
         dflt_lnk_usage sch_<<$app_name$>>.t_subconfig_value_linking_read_rule;
-
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
         g:= optimize_confentityparamkey(par_confparam_key, FALSE);
         target_confentity_id:= code_id_of_confentitykey(g.confentity_key);
         taget_param_name   := g.param_key;
@@ -629,10 +631,9 @@ BEGIN
                , dflt_lnk_usage
                );
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN 1;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION instaniate_confparam_as_subconfig(par_confparam_key t_confentityparam_key, par_subconfentity_code_id integer, default_value t_cpvalue_uni) IS
 'Returns count of rows inserted. Inserts row into "configurations_parameters__subconfigs" table.
@@ -642,7 +643,10 @@ When the function is called, abstract parameter must preexist, orelse an excepti
 
 --------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION confparam_instaniated_isit(par_confparam_key t_confentityparam_key) RETURNS t_confparam_type AS $$
+CREATE OR REPLACE FUNCTION confparam_instaniated_isit(par_confparam_key t_confentityparam_key) RETURNS t_confparam_type
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g  sch_<<$app_name$>>.t_confentityparam_key;
         g1 sch_<<$app_name$>>.t_cparameter_uni;
@@ -650,17 +654,13 @@ DECLARE
         target_confentity_id integer;
         taget_param_name    varchar;
         rows_count          integer;
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         g := optimize_confentityparamkey(par_confparam_key, FALSE);
         g1:= determine_cparameter(g);
         target_confentity_id:= code_id_of_confentitykey(g.confentity_key);
         taget_param_name   := g.param_key;
 
         IF g1.type IS NULL THEN
-                PERFORM leave_schema_namespace(namespace_info);
                 RETURN NULL;
         END IF;
 
@@ -692,10 +692,9 @@ BEGIN
             ELSE RAISE EXCEPTION 'An error occurred in function "confparam_instaniated_isit" for key: %! Unsupported parameter type: "%"!', show_confentityparamkey(par_confparam_key), g1.type;
         END CASE;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION confparam_instaniated_isit(par_confparam_key t_confentityparam_key) IS
 'Returns NULL, if parameter abstraction doesn''t exist or if parameter isn''t instaniated.
@@ -707,17 +706,17 @@ CREATE OR REPLACE FUNCTION add_confparams(
                   par_confentity_key  t_confentity_key
                 , par_cparameters_set t_cparameter_uni[]
                 , par_ifdoesntexist   boolean
-                ) RETURNS integer AS $$
+                ) RETURNS integer
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g sch_<<$app_name$>>.t_confentity_key;
         rows_count_add   integer;
         rows_count_accum integer;
         l integer;
         i integer;
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         g:= optimize_confentitykey(FALSE, par_confentity_key);
         rows_count_accum:= 0;
 
@@ -753,10 +752,9 @@ BEGIN
                 END CASE;
         END LOOP;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN rows_count_accum;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION add_confparams(
                           par_confentity_key  t_confentity_key
@@ -770,15 +768,14 @@ COMMENT ON FUNCTION add_confparams(
 CREATE OR REPLACE FUNCTION new_confentity_w_params(
           par_ce_name         varchar
         , par_cparameters_set t_cparameter_uni[]
-        ) RETURNS integer AS $$
+        ) RETURNS integer
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g sch_<<$app_name$>>.t_confentity_key;
         target_confentity_id integer;
-
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         SELECT new_confentity(
                   par_ce_name
                 , FALSE
@@ -789,10 +786,9 @@ BEGIN
 
         PERFORM add_confparams(g, par_cparameters_set, FALSE);
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN target_confentity_id;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION new_confentity_w_params(
           par_ce_name         varchar
@@ -809,7 +805,10 @@ CREATE OR REPLACE FUNCTION deinstaniate_confparam(
                 , par_cascade_setnull_subcfgrefernces   boolean
                 , par_warn_with_list_of_subcfgrefernces boolean
                 , par_dont_modify_anything              boolean
-                ) RETURNS integer AS $$
+                ) RETURNS integer
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g  sch_<<$app_name$>>.t_confentityparam_key;
         g1 sch_<<$app_name$>>.t_cparameter_uni;
@@ -820,11 +819,7 @@ DECLARE
         lnk_param_ids    varchar[];
         lnk_param_cfgs   sch_<<$app_name$>>.t_config_param__short[];
         act              varchar;
-
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         g:=  optimize_confentityparamkey(par_confparam_key, FALSE);
         g1:= determine_cparameter(g);
         target_ce_id:= code_id_of_confentitykey(g.confentity_key);
@@ -915,10 +910,7 @@ BEGIN
                         IF l > 0 THEN
                                 RAISE WARNING E'Confentity parameter-subconfig (confentity: %; param: "%") DELETION: \nfollowing defaults of parameters-subconfigs are referencing target parameter: %\nfollowing values of parameters-subconfigs are referencing target parameter: % %', target_ce_id, g.param_key, lnk_param_ids, lnk_param_cfgs, act;
                                 -- if no warning is enabled, then let user see output from exception on DELETE
-                                IF NOT par_cascade_setnull_subcfgrefernces THEN
-                                    PERFORM leave_schema_namespace(namespace_info);
-                                    RETURN 0;
-                                END IF;
+                                IF NOT par_cascade_setnull_subcfgrefernces THEN RETURN 0; END IF;
                         END IF;
                 END IF;
 
@@ -934,10 +926,9 @@ BEGIN
              ELSE RAISE EXCEPTION 'An error occurred in function "deinstaniate_confparam"! Unsupported parameter type: "%"!', g1.type;
         END CASE;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN rows_count_accum;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION deinstaniate_confparam(
                   par_confparam_key                     t_confentityparam_key
@@ -958,7 +949,10 @@ CREATE OR REPLACE FUNCTION delete_confparam(
                 , par_cascade_setnull_subcfgrefernces   boolean
                 , par_warn_with_list_of_subcfgrefernces boolean
                 , par_dont_modify_anything              boolean
-                ) RETURNS integer AS $$
+                ) RETURNS integer
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g sch_<<$app_name$>>.t_confentityparam_key;
         rows_count_accum integer;
@@ -967,11 +961,7 @@ DECLARE
         lnk_param_ids    varchar[];
         lnk_param_cfgs   sch_<<$app_name$>>.t_config_param__short[];
         act              varchar;
-
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         g:= optimize_confentityparamkey(par_confparam_key, FALSE);
 
         rows_count_accum:= deinstaniate_confparam(
@@ -990,10 +980,9 @@ BEGIN
                 rows_count_accum:= rows_count_accum + rows_count_add;
         END IF;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN rows_count_accum;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION delete_confparam(
                   par_confparam_key                     t_confentityparam_key
@@ -1010,12 +999,12 @@ Relies on "deinstaniate_confparam" function.
 -- GRANTS
 
 -- Reference functions:
-GRANT EXECUTE ON FUNCTION mk_cpvalue_null()TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION mk_cpvalue_l(value varchar)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION mk_cpvalue_s(value varchar, subcfg_ref_param_id varchar, subcfg_ref_usage t_subconfig_value_linking_read_rule)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION isconsistent_cpvalue(par_value t_cpvalue_uni)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION isdefined_cpvalue(par_value t_cpvalue_uni)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION isnull_cpvalue(par_value t_cpvalue_uni, par_total boolean)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION mk_cpvalue_null()TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION mk_cpvalue_l(value varchar)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION mk_cpvalue_s(value varchar, subcfg_ref_param_id varchar, subcfg_ref_usage t_subconfig_value_linking_read_rule)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION isconsistent_cpvalue(par_value t_cpvalue_uni)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION isdefined_cpvalue(par_value t_cpvalue_uni)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION isnull_cpvalue(par_value t_cpvalue_uni, par_total boolean)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
 GRANT EXECUTE ON FUNCTION mk_cparameter_uni(
           par_param_id                    varchar
@@ -1026,63 +1015,68 @@ GRANT EXECUTE ON FUNCTION mk_cparameter_uni(
         , par_subconfentity_code_id            integer
         , par_default_value               t_cpvalue_uni
         )
-TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
-GRANT EXECUTE ON FUNCTION make_confentityparamkey(par_confentity_key t_confentity_key, key varchar, key_is_lnged boolean)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION make_confentityparamkey_null()TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION make_confentityparamkey_bystr(par_confentity_id integer, par_param varchar)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION make_confentityparamkey_bystr2(par_confentity_str varchar, par_param varchar)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION confentityparam_is_null(par_confparam_key t_confentityparam_key, par_total boolean)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION show_confentityparamkey(par_confparam_key t_confentityparam_key)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION optimized_confentityparamkey_isit(par_confparam_key t_confentityparam_key)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION make_confentityparamkey(par_confentity_key t_confentity_key, key varchar, key_is_lnged boolean)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION make_confentityparamkey_null()TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION make_confentityparamkey_bystr(par_confentity_id integer, par_param varchar)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION make_confentityparamkey_bystr2(par_confentity_str varchar, par_param varchar)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION confentityparam_is_null(par_confparam_key t_confentityparam_key, par_total boolean)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION show_confentityparamkey(par_confparam_key t_confentityparam_key)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION optimized_confentityparamkey_isit(par_confparam_key t_confentityparam_key)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
 
 -- Lookup functions:
-GRANT EXECUTE ON FUNCTION optimize_confentityparamkey(par_confparam_key t_confentityparam_key, par_verify boolean)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION determine_cparameter(par_confparam_key t_confentityparam_key)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION get_params(par_confentity_key t_confentity_key)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION optimize_confentityparamkey(par_confparam_key t_confentityparam_key, par_verify boolean)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION determine_cparameter(par_confparam_key t_confentityparam_key)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION get_params(par_confentity_key t_confentity_key)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
 
 -- Administration functions:
 GRANT EXECUTE ON FUNCTION add_confparam_names(
                   par_confparam_key t_confentityparam_key
                 , par_names         name_construction_input[]
-                ) TO user_<<$app_name$>>_data_admin;
+                ) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
 GRANT EXECUTE ON FUNCTION new_confparam_abstract(
                   par_confentity_key t_confentity_key
                 , par_cparameter     t_cparameter_uni
                 , par_ifdoesntexist  boolean
-                ) TO user_<<$app_name$>>_data_admin;
+                ) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
 GRANT EXECUTE ON FUNCTION instaniate_confparam_as_leaf(
                   par_confparam_key t_confentityparam_key
                 , par_default_value varchar
-                ) TO user_<<$app_name$>>_data_admin;
+                ) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
 GRANT EXECUTE ON FUNCTION instaniate_confparam_as_subconfig(
           par_confparam_key    t_confentityparam_key
         , par_subconfentity_code_id integer
         , default_value        t_cpvalue_uni
-        ) TO user_<<$app_name$>>_data_admin;
-GRANT EXECUTE ON FUNCTION confparam_instaniated_isit(par_confparam_key t_confentityparam_key) TO user_<<$app_name$>>_data_admin;
+        ) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
+GRANT EXECUTE ON FUNCTION confparam_instaniated_isit(par_confparam_key t_confentityparam_key) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
 GRANT EXECUTE ON FUNCTION add_confparams(
                   par_confentity_key  t_confentity_key
                 , par_cparameters_set t_cparameter_uni[]
                 , par_ifdoesntexist   boolean
-                ) TO user_<<$app_name$>>_data_admin;
+                ) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
 GRANT EXECUTE ON FUNCTION new_confentity_w_params(
           par_ce_name         varchar
         , par_cparameters_set t_cparameter_uni[]
-        ) TO user_<<$app_name$>>_data_admin;
+        ) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
 GRANT EXECUTE ON FUNCTION deinstaniate_confparam(
                   par_confparam_key                     t_confentityparam_key
                 , par_cascade_setnull_subcfgrefernces   boolean
                 , par_warn_with_list_of_subcfgrefernces boolean
                 , par_dont_modify_anything              boolean
                 )
- TO user_<<$app_name$>>_data_admin;
+ TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
 GRANT EXECUTE ON FUNCTION delete_confparam(
                   par_confparam_key                     t_confentityparam_key
                 , par_cascade_setnull_subcfgrefernces   boolean
                 , par_warn_with_list_of_subcfgrefernces boolean
                 , par_dont_modify_anything              boolean
                 )
- TO user_<<$app_name$>>_data_admin;
+ TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
+
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+
+\echo NOTICE >>>>> confentityparam.init.sql [END]

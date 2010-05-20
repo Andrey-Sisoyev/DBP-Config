@@ -7,6 +7,11 @@
 --------------------------------------------------------------------------
 --------------------------------------------------------------------------
 
+\echo NOTICE >>>>> config.drop.sql [BEGIN]
+
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+
 -- Reference functions:
 DROP FUNCTION IF EXISTS make_configkey(par_confentity_key t_confentity_key, par_config varchar, par_cfgid_is_lnged boolean);
 DROP FUNCTION IF EXISTS make_configkey_null();
@@ -50,3 +55,8 @@ DROP FUNCTION IF EXISTS delete_config( par_config_key t_config_key
 DROP TYPE IF EXISTS t_config_key;
 DROP TYPE IF EXISTS t_confentity_param__short;
 DROP TYPE IF EXISTS t_config_param_subcfg__short;
+
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+
+\echo NOTICE >>>>> config.drop.sql [END]

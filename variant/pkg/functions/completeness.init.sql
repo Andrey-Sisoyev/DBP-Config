@@ -6,6 +6,12 @@
 
 --------------------------------------------------------------------------
 --------------------------------------------------------------------------
+
+\echo NOTICE >>>>> completeness.init.sql [BEGIN]
+
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+
 CREATE TYPE t_thorough_report_warning_mode AS ENUM ('WHEN LOSING COMPLETENESS', 'ALWAYS', 'NEVER');
 
 COMMENT ON TYPE t_thorough_report_warning_mode IS
@@ -21,7 +27,6 @@ Notice: used by the "config_completeness" function.
 CREATE OR REPLACE FUNCTION completeness_interpretation(par_completeness t_config_completeness_check_result) RETURNS boolean AS $$
 DECLARE r boolean;
 BEGIN
-        IF par_completeness IS NULL THEN RETURN NULL; END IF;
         CASE par_completeness
             WHEN 'th_chk_V' THEN r:= TRUE;
             WHEN 'th_chk_X' THEN r:= FALSE;
@@ -34,15 +39,13 @@ BEGIN
         END CASE;
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql IMMUTABLE STRICT;
 
 ---------------
 
 CREATE OR REPLACE FUNCTION show_completeness_check_result(par_completeness t_config_completeness_check_result) RETURNS varchar AS $$
 DECLARE r varchar;
-BEGIN
-        IF par_completeness IS NULL THEN RETURN NULL; END IF;
-        CASE par_completeness
+BEGIN   CASE par_completeness
             WHEN 'th_chk_V' THEN r:= 'thorough check successful';
             WHEN 'th_chk_X' THEN r:= 'thorough check failed';
             WHEN 'li_chk_V' THEN r:= 'light check successful';
@@ -54,7 +57,7 @@ BEGIN
         END CASE;
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql IMMUTABLE STRICT;
 
 ---------------------------------------------------
 
@@ -97,8 +100,8 @@ CREATE OR REPLACE FUNCTION mk_completeness_precheck_row(
       , par_cc_cnstr_array_failure_idx integer
       , par_cc_subconfig_is_complete   t_config_completeness_check_result
       ) RETURNS t_completeness_check_row AS $$
-        SELECT ROW ($1,$2,$3,$4,$5,$6) :: t_completeness_check_row;
-$$ LANGUAGE SQL;
+        SELECT ROW ($1,$2,$3,$4,$5,$6) :: sch_<<$app_name$>>.t_completeness_check_row;
+$$ LANGUAGE SQL IMMUTABLE;
 
 -----------------
 
@@ -114,7 +117,9 @@ $$ LANGUAGE plpgsql;
 
 ----------------------------
 
-CREATE OR REPLACE FUNCTION cc_cnstr_arr_check(par_cc_row t_completeness_check_row) RETURNS t_completeness_check_row AS $$
+CREATE OR REPLACE FUNCTION cc_cnstr_arr_check(par_cc_row t_completeness_check_row) RETURNS t_completeness_check_row
+LANGUAGE plpgsql
+AS $$
 DECLARE
         r sch_<<$app_name$>>.t_completeness_check_row;
         i integer;
@@ -149,7 +154,7 @@ BEGIN
 
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION cc_cnstr_arr_check(par_cc_row t_completeness_check_row) IS
 'This fuction checks if value+config respects constraints defined by user in the ".param_value.param_base.constraints_array".
@@ -161,16 +166,16 @@ CREATE OR REPLACE FUNCTION cc_subcfg_compl_check(
                 par_cc_row                  t_completeness_check_row
               , par_thorough_mode           integer
               , par_thorough_report_warning t_thorough_report_warning_mode
-              ) RETURNS t_completeness_check_row AS $$
+              ) RETURNS t_completeness_check_row
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         r              sch_<<$app_name$>>.t_completeness_check_row;
         ck             sch_<<$app_name$>>.t_config_key;
         chk            sch_<<$app_name$>>.t_config_completeness_check_result;
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
         r:= par_cc_row;
-
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
 
         IF ((par_cc_row.param_value).param_base).type = 'leaf' THEN
                 r.cc_subconfig_is_complete:= 'le_V';
@@ -179,10 +184,9 @@ BEGIN
                 r.cc_subconfig_is_complete:= config_is_complete(ck, par_thorough_mode, par_thorough_report_warning);
         END IF;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION cc_subcfg_compl_check(
                 par_cc_row                  t_completeness_check_row
@@ -196,14 +200,13 @@ For more info about "par_thorough_mode" read comment to "config_completeness" fu
 
 ----------------------------
 
-CREATE OR REPLACE FUNCTION get_paramvalues_cc(par_config_key t_config_key) RETURNS t_completeness_check_row[] AS $$
-DECLARE
-        g  sch_<<$app_name$>>.t_config_key;
+CREATE OR REPLACE FUNCTION get_paramvalues_cc(par_config_key t_config_key) RETURNS t_completeness_check_row[]
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
+DECLARE g  sch_<<$app_name$>>.t_config_key;
         r  sch_<<$app_name$>>.t_completeness_check_row[];
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         g:= optimize_configkey(par_config_key, FALSE);
 
         r:= ARRAY(
@@ -219,10 +222,9 @@ BEGIN
                 ORDER BY (cps.param_base).type, (cps.param_base).param_id
         );
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 ----------------------------
 
@@ -256,7 +258,10 @@ CREATE OR REPLACE FUNCTION check_paramvalues_cc(
           par_cc_rows t_completeness_check_row[]
         , par_perform_cnstr_checks integer
         , par_thorough_report_warning t_thorough_report_warning_mode
-        ) RETURNS t_completeness_check_row[] AS $$
+        ) RETURNS t_completeness_check_row[]
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g  sch_<<$app_name$>>.t_config_key;
         r  sch_<<$app_name$>>.t_completeness_check_row;
@@ -266,7 +271,6 @@ DECLARE
         mode3 integer;
         i integer;
         l integer;
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
         mode1:=     par_perform_cnstr_checks / 100;
         mode2:= mod(par_perform_cnstr_checks , 100) / 10;
@@ -275,8 +279,6 @@ BEGIN
         IF par_perform_cnstr_checks IS NULL OR (mode1 NOT IN (0,1)) OR (mode2 NOT IN (0,1)) OR (mode3 NOT IN (0,1,2,3,4)) THEN
                 RAISE EXCEPTION 'An error occurred in function "check_paramvalues_cc"! Wrong mode specified in "par_perform_cnstr_checks" parameter: %. Read comments to the function for more info on supported modes.', par_perform_cnstr_checks;
         END IF;
-
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
 
         i:= 0;
         l:= array_length(par_cc_rows, 1);
@@ -301,10 +303,9 @@ BEGIN
                 ar[i]:= r;
         END LOOP;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN ar;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION check_paramvalues_cc(
                           par_cc_rows t_completeness_check_row[]
@@ -364,7 +365,10 @@ CREATE TYPE t_completeness_check_file AS (
 
 -------------------------
 
-CREATE OR REPLACE FUNCTION form_cc_report(par_cfgkey t_config_key, par_cc_rows t_completeness_check_row[]) RETURNS t_completeness_check_file AS $$
+CREATE OR REPLACE FUNCTION form_cc_report(par_cfgkey t_config_key, par_cc_rows t_completeness_check_row[]) RETURNS t_completeness_check_file
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g  sch_<<$app_name$>>.t_config_key;
         r  sch_<<$app_name$>>.t_completeness_check_row[];
@@ -379,10 +383,7 @@ DECLARE
         subcfgs_cnt integer:= 0;
         this_complete boolean;
         f sch_<<$app_name$>>.t_completeness_check_file;
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         g:= optimize_configkey(par_cfgkey, FALSE);
 
         f.cc_rows_set := par_cc_rows;
@@ -462,10 +463,9 @@ BEGIN
         f.errors_report := f.errors_report || E'\nREPORT END';
         f.errors_report := f.errors_report || E'\n------------------------>---';
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN f;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION form_cc_report(par_cfgkey t_config_key, par_cc_rows t_completeness_check_row[]) IS
 'It is assumed, that given in "par_cc_rows" array contains all rows belonging to one same config.';
@@ -477,7 +477,10 @@ CREATE OR REPLACE FUNCTION config_completeness(
                 , par_thorough_check          integer
                 , par_thorough_report_warning t_thorough_report_warning_mode
                 , par_update_mode             integer
-                ) RETURNS t_config_completeness_check_result AS $$
+                ) RETURNS t_config_completeness_check_result
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         cur_ck     sch_<<$app_name$>>.t_config_key;
         sub_ck     sch_<<$app_name$>>.t_config_key;
@@ -502,7 +505,6 @@ DECLARE
         i integer;
         j integer;
         l integer;
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
         umode1:=     par_update_mode / 100;
         umode2:= mod(par_update_mode , 100) / 10;
@@ -524,7 +526,7 @@ BEGIN
                 RAISE EXCEPTION 'An error occurred in function "config_completeness"! Parameter "par_config_tree_row" sub- part is not allowed to be NULL!';
         END IF;
 
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
+        ------------------
         r:= NULL :: t_config_completeness_check_result;
 
         IF par_config_tree_row.cycle_detected AND par_thorough_check > 1 THEN
@@ -539,7 +541,6 @@ BEGIN
                           AND confentity_code_id = par_config_tree_row.sub_ce_id;
                 END IF;
 
-                PERFORM leave_schema_namespace(namespace_info);
                 RETURN r;
         END IF;
 
@@ -573,7 +574,6 @@ BEGIN
                         f.errors_report := f.errors_report || E'\n------------------------>---';
                         RAISE WARNING '%', f.errors_report;
 
-                        PERFORM leave_schema_namespace(namespace_info);
                         RETURN r;
                 END IF;
         END IF;
@@ -638,7 +638,6 @@ BEGIN
                                           AND confentity_code_id = cur_ct_row.sub_ce_id;
                                 END IF;
 
-                                PERFORM leave_schema_namespace(namespace_info);
                                 RETURN r;
                             END IF;
                         END IF;
@@ -723,10 +722,9 @@ BEGIN
                 END LOOP;
         END IF;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION config_completeness(
                   par_config_tree_row         t_configs_tree_rel
@@ -764,7 +762,10 @@ CREATE OR REPLACE FUNCTION config_completeness(
                 , par_thorough_check          integer
                 , par_thorough_report_warning t_thorough_report_warning_mode
                 , par_update_mode             integer
-                ) RETURNS t_config_completeness_check_result AS $$
+                ) RETURNS t_config_completeness_check_result
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE SQL
+AS $$
         SELECT config_completeness(
                 mk_configs_tree_rel(
                         NULL :: integer
@@ -784,7 +785,7 @@ CREATE OR REPLACE FUNCTION config_completeness(
                 , $4
                 )
         FROM unnest(ARRAY(SELECT optimize_configkey($1, FALSE) AS a)) AS x;
-$$ LANGUAGE SQL;
+$$;
 
 COMMENT ON FUNCTION config_completeness(
                   par_config_key              t_config_key
@@ -803,7 +804,10 @@ CREATE OR REPLACE FUNCTION config_is_complete(
                   par_config_key              t_config_key
                 , par_thorough_check          integer
                 , par_thorough_report_warning t_thorough_report_warning_mode
-                ) RETURNS t_config_completeness_check_result AS $$
+                ) RETURNS t_config_completeness_check_result
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE SQL
+AS $$
         SELECT config_completeness(
                 mk_configs_tree_rel(
                         NULL :: integer
@@ -824,7 +828,7 @@ CREATE OR REPLACE FUNCTION config_is_complete(
                 , 0
                 )
         FROM unnest(ARRAY(SELECT optimize_configkey($1, FALSE) AS a)) AS x
-$$ LANGUAGE SQL;
+$$;
 
 COMMENT ON FUNCTION config_is_complete(
                   par_config_key              t_config_key
@@ -838,9 +842,12 @@ But for more info about parameters see commnts on on the wrapped function.
 
 -----------------------------
 
-CREATE OR REPLACE FUNCTION try_to_complete_config(par_config_key t_config_key) RETURNS t_config_completeness_check_result AS $$
+CREATE OR REPLACE FUNCTION try_to_complete_config(par_config_key t_config_key) RETURNS t_config_completeness_check_result
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE SQL
+AS $$
         SELECT config_completeness(optimize_configkey($1, FALSE), 2, 'ALWAYS', 10)
-$$ LANGUAGE SQL;
+$$;
 
 COMMENT ON FUNCTION try_to_complete_config(par_config_key t_config_key) IS
 'Simplifying wrapper:
@@ -852,13 +859,13 @@ COMMENT ON FUNCTION try_to_complete_config(par_config_key t_config_key) IS
 
 -------------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION uncomplete_cfg(par_config_key t_config_key) RETURNS integer AS $$
+CREATE OR REPLACE FUNCTION uncomplete_cfg(par_config_key t_config_key) RETURNS integer
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE g sch_<<$app_name$>>.t_config_key;
         cnt integer;
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         g:= optimize_configkey($1, FALSE);
 
         UPDATE configurations AS c
@@ -869,18 +876,17 @@ BEGIN
 
         GET DIAGNOSTICS cnt = ROW_COUNT;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN cnt;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 --------------------------------------------------------------------------
 --------------------------------------------------------------------------
 -- GRANTS
 
 -- Reference functions:
-GRANT EXECUTE ON FUNCTION completeness_interpretation(par_completeness t_config_completeness_check_result)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION show_completeness_check_result(par_completeness t_config_completeness_check_result)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION completeness_interpretation(par_completeness t_config_completeness_check_result)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION show_completeness_check_result(par_completeness t_config_completeness_check_result)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION mk_completeness_precheck_row(
         par_confentity_code_id integer
       , par_config_id          varchar
@@ -888,20 +894,20 @@ GRANT EXECUTE ON FUNCTION mk_completeness_precheck_row(
       , par_cc_null_cnstr_passed_ok    boolean
       , par_cc_cnstr_array_failure_idx integer
       , par_cc_subconfig_is_complete   t_config_completeness_check_result
-      )TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION form_cc_report(par_cfgkey t_config_key, par_cc_rows t_completeness_check_row[])TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+      )TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION form_cc_report(par_cfgkey t_config_key, par_cc_rows t_completeness_check_row[])TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
 
 -- Analytic functions:
-GRANT EXECUTE ON FUNCTION cc_null_check(par_cc_row t_completeness_check_row)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION cc_cnstr_arr_check(par_cc_row t_completeness_check_row)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION seek_paramvalues_cc_by_subcfg_ctr(par_config_tree_row t_configs_tree_rel, par_pvcc_set t_completeness_check_row[])TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION cc_isit(par_cc_rows t_completeness_check_row[])TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION cc_null_check(par_cc_row t_completeness_check_row)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION cc_cnstr_arr_check(par_cc_row t_completeness_check_row)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION seek_paramvalues_cc_by_subcfg_ctr(par_config_tree_row t_configs_tree_rel, par_pvcc_set t_completeness_check_row[])TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION cc_isit(par_cc_rows t_completeness_check_row[])TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION check_paramvalues_cc(
           par_cc_rows t_completeness_check_row[]
         , par_perform_cnstr_checks integer
         , par_thorough_report_warning t_thorough_report_warning_mode
-        )TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+        )TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
 
 -- Lookup functions:
@@ -909,8 +915,8 @@ GRANT EXECUTE ON FUNCTION cc_subcfg_compl_check(
                 par_cc_row                  t_completeness_check_row
               , par_thorough_mode           integer
               , par_thorough_report_warning t_thorough_report_warning_mode
-              )TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION get_paramvalues_cc(par_config_key t_config_key)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+              )TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION get_paramvalues_cc(par_config_key t_config_key)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
 
 -- Administration functions:
@@ -919,17 +925,22 @@ GRANT EXECUTE ON FUNCTION config_completeness(
                 , par_thorough_check          integer
                 , par_thorough_report_warning t_thorough_report_warning_mode
                 , par_update_mode             integer
-                ) TO user_<<$app_name$>>_data_admin;
+                ) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
 GRANT EXECUTE ON FUNCTION config_completeness(
                   par_config_key              t_config_key
                 , par_thorough_check          integer
                 , par_thorough_report_warning t_thorough_report_warning_mode
                 , par_update_mode             integer
-                ) TO user_<<$app_name$>>_data_admin;
+                ) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
 GRANT EXECUTE ON FUNCTION config_is_complete(
                   par_config_key              t_config_key
                 , par_thorough_check          integer
                 , par_thorough_report_warning t_thorough_report_warning_mode
-                ) TO user_<<$app_name$>>_data_admin;
-GRANT EXECUTE ON FUNCTION try_to_complete_config(par_config_key t_config_key) TO user_<<$app_name$>>_data_admin;
-GRANT EXECUTE ON FUNCTION uncomplete_cfg(par_config_key t_config_key) TO user_<<$app_name$>>_data_admin;
+                ) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
+GRANT EXECUTE ON FUNCTION try_to_complete_config(par_config_key t_config_key) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
+GRANT EXECUTE ON FUNCTION uncomplete_cfg(par_config_key t_config_key) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
+
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+
+\echo NOTICE >>>>> completeness.init.sql [END]

@@ -7,6 +7,11 @@
 --------------------------------------------------------------------------
 --------------------------------------------------------------------------
 
+\echo NOTICE >>>>> configparam.init.sql [BEGIN]
+
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+
 CREATE TYPE t_cpvalue_final_source AS ENUM ('ce_dflt', 'cp_dflt', 'cpv', 'cp_dflt_il', 'cpv_il', 'null');
 COMMENT ON TYPE t_cpvalue_final_source IS '
 Parameter value is may finally be determined from different sources, but always by same standard scheme.
@@ -47,7 +52,9 @@ CREATE OR REPLACE FUNCTION mk_cparameter_value(
         , par_final_value     varchar
         , par_final_value_src t_cpvalue_final_source
         , par_type            t_confparam_type
-        ) RETURNS t_cparameter_value_uni AS $$
+        ) RETURNS t_cparameter_value_uni
+LANGUAGE plpgsql IMMUTABLE
+AS $$
 DECLARE
         cr1 boolean;
         cr2 boolean;
@@ -75,7 +82,7 @@ BEGIN
         ELSE    RAISE EXCEPTION 'Ar error occurred in the "mk_cparameter_value" function! Parameter type inconsistency.';
         END IF;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION mk_cparameter_value(
           par_param_base      t_cparameter_uni
@@ -94,7 +101,7 @@ CREATE OR REPLACE FUNCTION cparameter_finval_persists(
         , par_final_value_src t_cpvalue_final_source
         ) RETURNS boolean AS $$
         SELECT $1.final_value IS NOT NULL AND $1.final_value_src IS NOT DISTINCT FROM $2;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 ------------------------------
 
@@ -113,7 +120,7 @@ BEGIN
         ELSE RETURN i;
         END IF;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql IMMUTABLE;
 
 --------------------------------------------------------------------------
 --------------------------------------------------------------------------
@@ -127,19 +134,19 @@ COMMENT ON TYPE t_configparam_key IS
 
 CREATE OR REPLACE FUNCTION make_configparamkey(par_config_key t_config_key, param_key varchar, param_key_is_lnged boolean) RETURNS t_configparam_key AS $$
         SELECT ROW($1, $2, $3) :: sch_<<$app_name$>>.t_configparam_key;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION make_configparamkey_null() RETURNS t_configparam_key AS $$
         SELECT ROW(sch_<<$app_name$>>.make_configkey_null(), NULL :: varchar, NULL :: boolean) :: sch_<<$app_name$>>.t_configparam_key;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION make_configparamkey_bystr2(par_confentity_id integer, par_config_id varchar, par_param_key varchar) RETURNS t_configparam_key AS $$
         SELECT ROW(sch_<<$app_name$>>.make_configkey_bystr($1, $2), $3, FALSE) :: sch_<<$app_name$>>.t_configparam_key;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION make_configparamkey_bystr3(par_confentity_str varchar, par_config_id varchar, par_param_key varchar) RETURNS t_configparam_key AS $$
         SELECT ROW(sch_<<$app_name$>>.make_configkey_bystr2($1, $2), $3, FALSE) :: sch_<<$app_name$>>.t_configparam_key;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION make_cop_from_cep(par_confparam_key t_confentityparam_key, par_config_id varchar, par_cfg_lnged boolean) RETURNS t_configparam_key AS $$
         SELECT sch_<<$app_name$>>.make_configparamkey(
@@ -147,7 +154,7 @@ CREATE OR REPLACE FUNCTION make_cop_from_cep(par_confparam_key t_confentityparam
                       , ($1).param_key
                       , ($1).param_key_is_lnged
                       ) :: sch_<<$app_name$>>.t_configparam_key;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION make_cep_from_cop(par_configparam_key t_configparam_key) RETURNS t_confentityparam_key AS $$
         SELECT sch_<<$app_name$>>.make_confentityparamkey(
@@ -155,7 +162,7 @@ CREATE OR REPLACE FUNCTION make_cep_from_cop(par_configparam_key t_configparam_k
                       , ($1).param_key
                       , ($1).param_key_is_lnged
                       ) :: sch_<<$app_name$>>.t_confentityparam_key;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 ------------
 
@@ -166,7 +173,7 @@ CREATE OR REPLACE FUNCTION configparamkey_is_null(par_configparam_key t_configpa
                              WHEN FALSE THEN sch_<<$app_name$>>.config_is_null($1.config_key, $2) OR  ($1.param_key IS NULL) OR  ($1.param_key_is_lnged IS NULL)
                          END
                END;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 --------------
 
@@ -188,11 +195,14 @@ CREATE OR REPLACE FUNCTION show_configparamkey(par_configparam_key t_configparam
                       END
                )
             || '}';
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 --------------
 
-CREATE OR REPLACE FUNCTION optimized_cop_isit(par_configparam_key t_configparam_key) RETURNS boolean AS $$
+CREATE OR REPLACE FUNCTION optimized_cop_isit(par_configparam_key t_configparam_key) RETURNS boolean
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql IMMUTABLE
+AS $$
 DECLARE r boolean;
 BEGIN
         IF par_configparam_key.param_key_is_lnged IS NULL THEN
@@ -208,19 +218,19 @@ BEGIN
         r:= NOT par_configparam_key.param_key_is_lnged AND sch_<<$app_name$>>.optimized_configkey_isit(par_configparam_key.config_key);
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 --------------
 
-CREATE OR REPLACE FUNCTION optimize_configparamkey(par_configparam_key t_configparam_key) RETURNS t_configparam_key AS $$
-DECLARE
-        cop            sch_<<$app_name$>>.t_configparam_key;
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
+CREATE OR REPLACE FUNCTION optimize_configparamkey(par_configparam_key t_configparam_key) RETURNS t_configparam_key
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
+DECLARE cop            sch_<<$app_name$>>.t_configparam_key;
 BEGIN
         IF sch_<<$app_name$>>.optimized_cop_isit(par_configparam_key) THEN
                 RETURN par_configparam_key;
         END IF;
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
 
         cop := make_configparamkey(
                         optimize_configkey(par_configparam_key.config_key)
@@ -233,14 +243,16 @@ BEGIN
                       , FALSE
                       );
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN cop ;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 --------------
 
-CREATE OR REPLACE FUNCTION determine_cvalue_of_cop(par_configparam_key t_configparam_key) RETURNS t_cparameter_value_uni AS $$
+CREATE OR REPLACE FUNCTION determine_cvalue_of_cop(par_configparam_key t_configparam_key) RETURNS t_cparameter_value_uni
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         cop      sch_<<$app_name$>>.t_configparam_key;
         cval     sch_<<$app_name$>>.t_cpvalue_uni;
@@ -248,11 +260,7 @@ DECLARE
         cparam   sch_<<$app_name$>>.t_cparameter_uni;
         r        sch_<<$app_name$>>.t_cparameter_value_uni;
         rec      RECORD;
-
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         cop := optimize_configparamkey(par_configparam_key);
 
         cparam:= determine_cparameter(make_cep_from_cop(cop));
@@ -291,10 +299,9 @@ BEGIN
 
         r:= mk_cparameter_value(cparam, cval, NULL :: varchar, NULL :: t_cpvalue_final_source, pt);
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION determine_cvalue_of_cop(
                 par_configparam_key t_configparam_key
@@ -310,7 +317,10 @@ CREATE OR REPLACE FUNCTION determine_value_of_cvalue(
               , par_cparamvalue t_cparameter_value_uni
               , par_config_key  t_config_key
               , par_link_buffer varchar[]
-              ) RETURNS t_cparameter_value_uni AS $$
+              ) RETURNS t_cparameter_value_uni
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         cp_f_val_lnk sch_<<$app_name$>>.t_cparameter_value_uni;
         cfg          sch_<<$app_name$>>.t_config_key;
@@ -322,8 +332,6 @@ DECLARE
         lnk_param_id varchar;
         cur_parar_id varchar;
         new_lnk_buf  varchar[];
-
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
         r:= par_cparamvalue;
         r.final_value:= NULL;
@@ -335,7 +343,6 @@ BEGIN
                 RETURN r;
         END IF;
 
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
 
         pt          := (par_cparamvalue.param_base).type;
         cur_parar_id:= (par_cparamvalue.param_base).param_id;
@@ -499,10 +506,9 @@ BEGIN
         THEN RAISE EXCEPTION null_value_not_allowed USING HINT='Determined final value of config parameter "' || (par_cparamvalue.param_base).param_id || '" is not allowed to be NULL.';
         END IF;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION determine_value_of_cvalue(
                 par_allow_null  boolean
@@ -559,16 +565,15 @@ COMMENT ON FUNCTION determine_finvalue_by_cop(
 CREATE OR REPLACE FUNCTION get_paramvalues(
           par_allow_null_values boolean
         , par_config_key        t_config_key
-        ) RETURNS t_cparameter_value_uni[] AS $$
+        ) RETURNS t_cparameter_value_uni[]
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g  sch_<<$app_name$>>.t_config_key;
         ps sch_<<$app_name$>>.t_cparameter_uni[];
         r  sch_<<$app_name$>>.t_cparameter_value_uni[];
-
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         g:= optimize_configkey(par_config_key, FALSE);
         ps:= get_params(g.confentity_key);
 
@@ -584,10 +589,9 @@ BEGIN
                 FROM unnest(ps) AS cps -- t_cparameter_uni
         );
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION get_paramvalues(par_allow_null_values boolean, par_config_key t_config_key) IS
 'Wrapper around "get_params" and "determine_cvalue_of_cop(par_allow_null_values, ..." functions.
@@ -596,7 +600,10 @@ COMMENT ON FUNCTION get_paramvalues(par_allow_null_values boolean, par_config_ke
 --------------------------------------------------------------------------
 --------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION set_confparam_value(par_configparam_key t_configparam_key, par_cpvalue t_cpvalue_uni, par_overwrite integer) RETURNS integer AS $$
+CREATE OR REPLACE FUNCTION set_confparam_value(par_configparam_key t_configparam_key, par_cpvalue t_cpvalue_uni, par_overwrite integer) RETURNS integer
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g sch_<<$app_name$>>.t_configparam_key;
         test boolean;
@@ -606,13 +613,10 @@ DECLARE
         sce_id  integer;
         old_lnk varchar;
         old_lnk_usage  sch_<<$app_name$>>.t_subconfig_value_linking_read_rule;
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
         IF par_overwrite NOT IN (0,1,10) THEN
                 RAISE EXCEPTION 'An error occurred in function "set_confparam_value"! Wrong mode specified in "par_overwrite" parameter: %.', par_overwrite;
         END IF;
-
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
 
         IF NOT isconsistent_cpvalue(par_cpvalue) THEN
                 RAISE EXCEPTION 'An error occurred in function "set_confparam_value"! Inconsistent value parameter (par_cpvalue).';
@@ -735,10 +739,9 @@ BEGIN
 
         rows_cnt_accum:= rows_cnt_accum + rows_cnt_add;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN rows_cnt_accum;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION set_confparam_value(par_configparam_key t_configparam_key, par_cpvalue t_cpvalue_uni, par_overwrite integer) IS '
 Returns number of rows modified.
@@ -753,20 +756,20 @@ No special overwrite permission is needed in case, when entry for confparam valu
 
 CREATE TYPE t_paramvals__short AS (param_id varchar, value t_cpvalue_uni);
 
-CREATE OR REPLACE FUNCTION set_confparam_values_set(par_config t_config_key, par_pv_set t_paramvals__short[], par_overwrite integer) RETURNS integer AS $$
+CREATE OR REPLACE FUNCTION set_confparam_values_set(par_config t_config_key, par_pv_set t_paramvals__short[], par_overwrite integer) RETURNS integer
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g                   sch_<<$app_name$>>.t_config_key;
         cfg_params          sch_<<$app_name$>>.t_cparameter_uni[];
         cfg_params_vals     sch_<<$app_name$>>.t_cparameter_value_uni[];
         rows_accum integer;
         rows_add   integer;
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
         IF par_overwrite NOT IN (0,1,10) THEN
                 RAISE EXCEPTION 'An error occurred in function "set_confparam_values_set"! Wrong mode specified in "par_overwrite" parameter: %.', par_overwrite;
         END IF;
-
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
 
         g:= optimize_configkey(par_config, FALSE);
         cfg_params:= get_params(g.confentity_key);
@@ -802,10 +805,9 @@ BEGIN
         INTO rows_accum
         FROM unnest(cfg_params_vals) AS x; -- t_cparameter_value_uni
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN rows_accum;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION set_confparam_values_set(par_config t_config_key, par_pv_set t_paramvals__short[], par_overwrite integer) IS
 'Returns number of rows modified.
@@ -823,18 +825,17 @@ CREATE OR REPLACE FUNCTION new_config(
               , par_confentity_key  t_confentity_key
               , par_config_id       varchar
               , par_paramvalues_set t_paramvals__short[]
-              ) RETURNS integer AS $$
+              ) RETURNS integer
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         target_confentity_id integer;
         rows_count_add   integer;
         rows_count_accum integer;
         cfg sch_<<$app_name$>>.t_config_key;
         g   sch_<<$app_name$>>.t_confentity_key;
-
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         g:= optimize_confentitykey(FALSE, par_confentity_key);
         rows_count_accum:= new_config(par_ifdoesnt_exist, g, par_config_id);
 
@@ -845,10 +846,9 @@ BEGIN
         rows_count_add:= set_confparam_values_set(cfg, par_paramvalues_set, 10);
         rows_count_accum:= rows_count_accum + rows_count_add;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN rows_count_accum;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION new_config(
                 par_ifdoesnt_exist  boolean
@@ -863,15 +863,14 @@ Relies on "new_config(par_ifdoesnt_exist boolean, par_confentity_key t_confentit
 
 --------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION unset_confparam_value(par_configparam_key t_configparam_key, par_ifvalueexists boolean) RETURNS integer AS $$
+CREATE OR REPLACE FUNCTION unset_confparam_value(par_configparam_key t_configparam_key, par_ifvalueexists boolean) RETURNS integer
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE g  sch_<<$app_name$>>.t_configparam_key;
         pv sch_<<$app_name$>>.t_cparameter_uni;
         rows_cnt integer;
-
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         g := optimize_configparamkey(par_configparam_key);
         pv:= determine_cparameter(make_cep_from_cop(g));
 
@@ -909,10 +908,9 @@ BEGIN
                 END IF;
         END IF;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN rows_cnt;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION unset_confparam_value(par_configparam_key t_configparam_key, par_ifvalueexists boolean) IS '
 Deletes entry from "configurations_parameters_values__(leafs|subconfigs)" table.
@@ -931,56 +929,61 @@ GRANT EXECUTE ON FUNCTION mk_cparameter_value(
         , par_final_value     varchar
         , par_final_value_src t_cpvalue_final_source
         , par_type            t_confparam_type
-        )TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION get_param_from_list(par_parlist t_cparameter_value_uni[], par_target_name varchar)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+        )TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION get_param_from_list(par_parlist t_cparameter_value_uni[], par_target_name varchar)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
-GRANT EXECUTE ON FUNCTION make_configparamkey(par_config_key t_config_key, param_key varchar, param_key_is_lnged boolean)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION make_configparamkey_null()TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION make_configparamkey_bystr2(par_confentity_id integer , par_config_id varchar, par_param_key varchar)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION make_configparamkey_bystr3(par_confentity_str varchar, par_config_id varchar, par_param_key varchar)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION make_cop_from_cep(par_confparam_key t_confentityparam_key, par_config_id varchar, par_cfg_lnged boolean)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION make_cep_from_cop(par_configparam_key t_configparam_key)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION configparamkey_is_null(par_configparam_key t_configparam_key, par_total boolean)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION show_configparamkey(par_configparam_key t_configparam_key)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION optimized_cop_isit(par_configparam_key t_configparam_key)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION make_configparamkey(par_config_key t_config_key, param_key varchar, param_key_is_lnged boolean)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION make_configparamkey_null()TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION make_configparamkey_bystr2(par_confentity_id integer , par_config_id varchar, par_param_key varchar)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION make_configparamkey_bystr3(par_confentity_str varchar, par_config_id varchar, par_param_key varchar)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION make_cop_from_cep(par_confparam_key t_confentityparam_key, par_config_id varchar, par_cfg_lnged boolean)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION make_cep_from_cop(par_configparam_key t_configparam_key)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION configparamkey_is_null(par_configparam_key t_configparam_key, par_total boolean)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION show_configparamkey(par_configparam_key t_configparam_key)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION optimized_cop_isit(par_configparam_key t_configparam_key)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION cparameter_finval_persists(
           par_cparam_val      t_cparameter_value_uni
         , par_final_value_src t_cpvalue_final_source
-        )TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+        )TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
 
 -- Lookup functions:
-GRANT EXECUTE ON FUNCTION optimize_configparamkey(par_configparam_key t_configparam_key)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION determine_cvalue_of_cop(par_configparam_key t_configparam_key)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION optimize_configparamkey(par_configparam_key t_configparam_key)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION determine_cvalue_of_cop(par_configparam_key t_configparam_key)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION determine_value_of_cvalue(
                 par_allow_null  boolean
               , par_cparamvalue t_cparameter_value_uni
               , par_config_key  t_config_key
               , par_link_buffer varchar[]
-              )TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+              )TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION determine_value_of_cvalue(
                 par_allow_null  boolean
               , par_cparamvalue t_cparameter_value_uni
               , par_config_key  t_config_key
-              )TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+              )TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION determine_finvalue_by_cop(
                 par_allow_null  boolean
               , par_configparam_key t_configparam_key
               )
-TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION get_paramvalues(
           par_allow_null_values boolean
         , par_config_key        t_config_key
-        )TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+        )TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
 
 -- Administration functions:
-GRANT EXECUTE ON FUNCTION set_confparam_value(par_configparam_key t_configparam_key, par_cpvalue t_cpvalue_uni, par_overwrite integer) TO user_<<$app_name$>>_data_admin;
-GRANT EXECUTE ON FUNCTION set_confparam_values_set(par_config t_config_key, par_pv_set t_paramvals__short[], par_overwrite integer) TO user_<<$app_name$>>_data_admin;
+GRANT EXECUTE ON FUNCTION set_confparam_value(par_configparam_key t_configparam_key, par_cpvalue t_cpvalue_uni, par_overwrite integer) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
+GRANT EXECUTE ON FUNCTION set_confparam_values_set(par_config t_config_key, par_pv_set t_paramvals__short[], par_overwrite integer) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
 GRANT EXECUTE ON FUNCTION new_config(
                 par_ifdoesnt_exist  boolean
               , par_confentity_key  t_confentity_key
               , par_config_id       varchar
               , par_paramvalues_set t_paramvals__short[]
-              ) TO user_<<$app_name$>>_data_admin;
-GRANT EXECUTE ON FUNCTION unset_confparam_value(par_configparam_key t_configparam_key, par_ifvalueexists boolean) TO user_<<$app_name$>>_data_admin;
+              ) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
+GRANT EXECUTE ON FUNCTION unset_confparam_value(par_configparam_key t_configparam_key, par_ifvalueexists boolean) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
+
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+
+\echo NOTICE >>>>> configparam.init.sql [END]

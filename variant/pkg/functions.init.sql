@@ -8,42 +8,40 @@
 --------------------------------------------------------------------------
 
 -- (1) case sensetive (2) postgres lowercases real names
-\c <<$db_name$>> user_<<$app_name$>>_owner
+\c <<$db_name$>> user_db<<$db_name$>>_app<<$app_name$>>_owner
 
-SET search_path TO sch_<<$app_name$>>, public; -- sets only for current session
+SET search_path TO sch_<<$app_name$>>, comn_funs, public; -- sets only for current session
+\set ECHO none
 
 -------------------------------------------------------------------------------
 -------------------------------------------------------------------------------
 -------------------------------------------------------------------------------
 
-\echo NOTICE >>>>> confentity.init.sql
 \i functions/confentity.init.sql
-\echo NOTICE >>>>> config.init.sql
 \i functions/config.init.sql
-\echo NOTICE >>>>> confentityparam.init.sql
 \i functions/confentityparam.init.sql
-\echo NOTICE >>>>> configparam.init.sql
 \i functions/configparam.init.sql
-\echo NOTICE >>>>> configs_tree.init.sql
 \i functions/configs_tree.init.sql
-\echo NOTICE >>>>> completeness.init.sql
 \i functions/completeness.init.sql
 
 -------------------------------------------------------------------------------
 -------------------------------------------------------------------------------
-\echo NOTICE >>>>> functions.init.sql
+
+\echo NOTICE >>>>> functions.init.sql [BEGIN]
+
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
 
 -- use it together with "get_param_from_list(t_cparameter_value_uni[], varchar) :: integer"
-CREATE OR REPLACE FUNCTION read_cfgmngsys_setup() RETURNS t_cparameter_value_uni[] AS $$
-DECLARE
-        cnt integer;
+CREATE OR REPLACE FUNCTION read_cfgmngsys_setup() RETURNS t_cparameter_value_uni[]
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
+DECLARE cnt integer;
         ce  sch_<<$app_name$>>.t_confentity_key;
         cfg sch_<<$app_name$>>.t_config_key;
         ps  sch_<<$app_name$>>.t_cparameter_value_uni[];
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         ce:= make_confentitykey_bystr('Configuration management system setup');
         ce:= optimize_confentitykey(FALSE, ce);
         cfg:= make_configkey_bystr(
@@ -54,14 +52,15 @@ BEGIN
         ps:= get_paramvalues(FALSE, cfg);
         -- raise notice '------------------------>>>>>>>>>>>>>>>>>>0> %', ps;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN ps;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 --------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION read_cfgmngsys_setup__output_credel_notices() RETURNS boolean AS $$
+CREATE OR REPLACE FUNCTION read_cfgmngsys_setup__output_credel_notices() RETURNS boolean
+LANGUAGE plpgsql
+AS $$
 DECLARE
         r boolean;
         o varchar;
@@ -76,11 +75,13 @@ BEGIN
         END CASE;
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 --------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION read_cfgmngsys_setup__perform_completness_routines() RETURNS boolean AS $$
+CREATE OR REPLACE FUNCTION read_cfgmngsys_setup__perform_completness_routines() RETURNS boolean
+LANGUAGE plpgsql
+AS $$
 DECLARE
         r boolean;
         o varchar;
@@ -95,11 +96,14 @@ BEGIN
         END CASE;
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 --------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION update_cfgs_ondepmodify(par_deps_list t_configs_tree_rel[], par_exclude_cfg t_config_key) RETURNS boolean AS $$
+CREATE OR REPLACE FUNCTION update_cfgs_ondepmodify(par_deps_list t_configs_tree_rel[], par_exclude_cfg t_config_key) RETURNS boolean
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         j integer;
         i integer;
@@ -117,11 +121,7 @@ DECLARE
         occa          sch_<<$app_name$>>.t_completeness_as_regulator;
         occa_use_dflt boolean;
         occa_option_name varchar;
-
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         cms_setup:= read_cfgmngsys_setup();
         occa_option_name:= 'completeness as regulator';
         always_isit:=  upper((cms_setup[get_param_from_list(cms_setup, 'when to check completeness'  )]).final_value) = 'ALWAYS';
@@ -219,18 +219,22 @@ BEGIN
                 END LOOP;
         END LOOP;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN TRUE;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 --------------------------------------------------------------------------
 --------------------------------------------------------------------------
 -- GRANTS
 
 -- Lookup functions:
-GRANT EXECUTE ON FUNCTION read_cfgmngsys_setup()TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION read_cfgmngsys_setup__output_credel_notices()TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION read_cfgmngsys_setup()TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION read_cfgmngsys_setup__output_credel_notices()TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
 -- Administration functions:
-GRANT EXECUTE ON FUNCTION update_cfgs_ondepmodify(par_deps_list t_configs_tree_rel[], par_exclude_cfg t_config_key) TO user_<<$app_name$>>_data_admin;
+GRANT EXECUTE ON FUNCTION update_cfgs_ondepmodify(par_deps_list t_configs_tree_rel[], par_exclude_cfg t_config_key) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
+
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+
+\echo NOTICE >>>>> functions.init.sql [END]

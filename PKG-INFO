@@ -16,7 +16,7 @@ Description:
       The code optimizations will be considered in further versions.
       Also, cycles are restricted in relations of type superconfig-subconfig.
       Enabling cycles support will be considered in further versions.
-Version: 0.1
+Version: 0.2
 License: BSD3
 Copyright: Copyright (c) 2010 Andrejs Sisojevs
 License-File: COPYING

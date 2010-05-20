@@ -7,6 +7,11 @@
 --------------------------------------------------------------------------
 --------------------------------------------------------------------------
 
+\echo NOTICE >>>>> config_tree.init.sql [BEGIN]
+
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+
 CREATE TYPE t_cfg_tree_rel_type AS ENUM ('init', 'sce_user', 'ce_user', 'pv_user', 'p_val', 'p_dflt_val', 'p_lnk_val', 'p_lnk_dflt', 'ce_dflt');
 
 COMMENT ON TYPE t_cfg_tree_rel_type IS
@@ -29,23 +34,24 @@ The relation between two types is expressed by the "finvalsrc2cfgtreerel" functi
 -----------------------------
 
 CREATE OR REPLACE FUNCTION cfg_tree_rel_main_types_set(par_with_lnks boolean) RETURNS t_cfg_tree_rel_type[] AS $$
-BEGIN   IF par_with_lnks IS NOT DISTINCT FROM TRUE THEN RETURN ARRAY['p_val', 'p_dflt_val', 'ce_dflt', 'p_lnk_val', 'p_lnk_dflt'];
-        ELSE RETURN ARRAY['p_val', 'p_dflt_val', 'ce_dflt']; END IF;
-END; $$ LANGUAGE plpgsql;
+        SELECT CASE $1 IS NOT DISTINCT FROM TRUE
+                   WHEN TRUE THEN ARRAY['p_val' :: t_cfg_tree_rel_type, 'p_dflt_val', 'ce_dflt', 'p_lnk_val', 'p_lnk_dflt']
+                   ELSE           ARRAY['p_val' :: t_cfg_tree_rel_type, 'p_dflt_val', 'ce_dflt']
+               END;
+$$ LANGUAGE SQL IMMUTABLE;
 
 -----------------------------
 
 CREATE OR REPLACE FUNCTION finvalsrc2cfgtreerel(par_finvalsrc t_cpvalue_final_source) RETURNS t_cfg_tree_rel_type AS $$
-BEGIN   IF par_finvalsrc IS NULL THEN RETURN NULL; END IF;
-        CASE par_finvalsrc
-            WHEN 'ce_dflt'    THEN RETURN 'ce_dflt';
-            WHEN 'cp_dflt'    THEN RETURN 'p_dflt_val';
-            WHEN 'cpv'        THEN RETURN 'p_val';
-            WHEN 'cp_dflt_il' THEN RETURN 'p_lnk_dflt';
-            WHEN 'cpv_il'     THEN RETURN 'p_lnk_val';
-            WHEN 'null'       THEN RETURN NULL;
-        END CASE;
-END; $$ LANGUAGE plpgsql;
+SELECT  CASE $1
+            WHEN 'ce_dflt'    THEN 'ce_dflt'
+            WHEN 'cp_dflt'    THEN 'p_dflt_val'
+            WHEN 'cpv'        THEN 'p_val'
+            WHEN 'cp_dflt_il' THEN 'p_lnk_dflt'
+            WHEN 'cpv_il'     THEN 'p_lnk_val'
+            WHEN 'null'       THEN NULL :: t_cfg_tree_rel_type
+        END;
+$$ LANGUAGE SQL IMMUTABLE STRICT;
 
 CREATE OR REPLACE FUNCTION finvalsrcEQcfgtreerel(par_finvalsrc t_cpvalue_final_source, par_cfgtreerel t_cfg_tree_rel_type) RETURNS boolean AS $$
 DECLARE r boolean;
@@ -57,7 +63,7 @@ BEGIN   IF par_finvalsrc IS NULL THEN r:= par_cfgtreerel IS NULL;
             END CASE;
         END IF;
         RETURN r;
-END; $$ LANGUAGE plpgsql;
+END; $$ LANGUAGE plpgsql IMMUTABLE;
 
 ----------------------------
 
@@ -104,11 +110,14 @@ CREATE OR REPLACE FUNCTION mk_configs_tree_rel(
       , par_sub_complete   t_config_completeness_check_result
       ) RETURNS t_configs_tree_rel AS $$
       SELECT ROW( $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11 ) :: sch_<<$app_name$>>.t_configs_tree_rel;
-$$ LANGUAGE SQL;
+$$ LANGUAGE SQL IMMUTABLE;
 
 -----------------------
 
-CREATE OR REPLACE FUNCTION cfg_idx_in_list(par_configkey t_config_key, par_config_list t_config_key[]) RETURNS integer AS $$
+CREATE OR REPLACE FUNCTION cfg_idx_in_list(par_configkey t_config_key, par_config_list t_config_key[]) RETURNS integer
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql IMMUTABLE
+AS $$
 DECLARE i integer; l integer; target_ce_id integer; target_cfg_id varchar; target_lnged_isit boolean; continue_ boolean;
 BEGIN   target_ce_id := sch_<<$app_name$>>.code_id_of_confentitykey(par_configkey.confentity_key);
         target_cfg_id:= par_configkey.config_id;
@@ -125,7 +134,7 @@ BEGIN   target_ce_id := sch_<<$app_name$>>.code_id_of_confentitykey(par_configke
         IF continue_ THEN i:= NULL :: integer; END IF;
         RETURN i;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION cfg_idx_in_list(par_configkey t_config_key, par_config_list t_config_key[]) IS '
 Returns index of configkey (1st param) in given array (2nd param), or NULL, if not found.
@@ -134,7 +143,10 @@ All config-keys are assummed to have *optimized* confentity-keys - the search ch
 
 --------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION show_cfgtreerow_path(par_configs_tree t_configs_tree_rel) RETURNS varchar AS $$
+CREATE OR REPLACE FUNCTION show_cfgtreerow_path(par_configs_tree t_configs_tree_rel) RETURNS varchar
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         i integer;
         l integer;
@@ -159,7 +171,7 @@ BEGIN
 
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION show_cfgtreerow_path(par_configs_tree t_configs_tree_rel) IS '
 Parameter "par_configs_tree" value is assummed to be an array of *optimized* config-keys. If any one is not or if array contains "NULL :: t_config_key", then the result of function will be NULL.
@@ -170,7 +182,10 @@ Parameter "par_configs_tree" value is assummed to be an array of *optimized* con
 CREATE OR REPLACE FUNCTION super_cfgs_of(
                                 par_config_tree_entry  t_configs_tree_rel
                               , par_value_source_types t_cfg_tree_rel_type[]
-                              ) RETURNS t_configs_tree_rel[] AS $$
+                              ) RETURNS t_configs_tree_rel[]
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g              sch_<<$app_name$>>.t_config_key;
         cur_layer_cfgs sch_<<$app_name$>>.t_configs_tree_rel[];
@@ -182,10 +197,7 @@ DECLARE
         target_ce_id    integer;
         target_cfg_id   varchar;
         target_complete t_config_completeness_check_result;
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         target_ce_id   := par_config_tree_entry.sub_ce_id;
         target_cfg_id  := par_config_tree_entry.sub_cfg_id;
         target_complete:= par_config_tree_entry.sub_complete;
@@ -416,10 +428,9 @@ BEGIN
               , par_value_source_types
               );
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN cur_layer_cfgs;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION super_cfgs_of(
                         par_config_tree_entry  t_configs_tree_rel
@@ -434,7 +445,10 @@ Takes "sub" part from given "par_config_tree_entry" and populates subconfigs. If
 CREATE OR REPLACE FUNCTION sub_cfgs_of(
                                 par_config_tree_entry  t_configs_tree_rel
                               , par_value_source_types t_cfg_tree_rel_type[]
-                              ) RETURNS t_configs_tree_rel[] AS $$
+                              ) RETURNS t_configs_tree_rel[]
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g               sch_<<$app_name$>>.t_config_key;
         ps              sch_<<$app_name$>>.t_cparameter_value_uni[];
@@ -450,11 +464,7 @@ DECLARE
         sub_ce_id       integer;
         sub_cfg_id      varchar;
         sub_complete    sch_<<$app_name$>>.t_config_completeness_check_result;
-
-        namespace_info  sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         target_ce_id   := par_config_tree_entry.super_ce_id;
         target_cfg_id  := par_config_tree_entry.super_cfg_id;
         target_complete:= par_config_tree_entry.super_complete;
@@ -502,10 +512,9 @@ BEGIN
             END IF;
         END LOOP;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN cur_layer_cfgs;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION sub_cfgs_of(
                         par_config_tree_entry  t_configs_tree_rel
@@ -520,15 +529,14 @@ Takes "super" part from given "par_config_tree_entry" and populates subconfigs. 
 CREATE OR REPLACE FUNCTION super_cfgs_of(
                                 par_config_key         t_config_key
                               , par_value_source_types t_cfg_tree_rel_type[]
-                              ) RETURNS t_configs_tree_rel[] AS $$
+                              ) RETURNS t_configs_tree_rel[]
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g sch_<<$app_name$>>.t_config_key;
         r sch_<<$app_name$>>.t_configs_tree_rel[];
-
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         g:= optimize_configkey(par_config_key, FALSE);
 
         r:= super_cfgs_of(
@@ -548,25 +556,24 @@ BEGIN
             , par_value_source_types
             );
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 --------------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION sub_cfgs_of(
                                 par_config_key         t_config_key
                               , par_value_source_types t_cfg_tree_rel_type[]
-                              ) RETURNS t_configs_tree_rel[] AS $$
+                              ) RETURNS t_configs_tree_rel[]
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g sch_<<$app_name$>>.t_config_key;
         r sch_<<$app_name$>>.t_configs_tree_rel[];
         cpl sch_<<$app_name$>>.t_config_completeness_check_result;
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         g:= optimize_configkey(par_config_key, FALSE);
         cpl:= read_completeness(g);
         r:= sub_cfgs_of(
@@ -586,25 +593,24 @@ BEGIN
             , par_value_source_types
             );
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 --------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION subconfigparams_lnks_extraction(
                 par_cfgs_tree          t_configs_tree_rel[]
               , par_value_source_types t_cfg_tree_rel_type[]
-              ) RETURNS t_configs_tree_rel[] AS $$
+              ) RETURNS t_configs_tree_rel[]
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         il_itera_cfgs  sch_<<$app_name$>>.t_configs_tree_rel[];
         il_sesp_cfgs   sch_<<$app_name$>>.t_configs_tree_rel[];
         il_accum_cfgs  sch_<<$app_name$>>.t_configs_tree_rel[];
         l              integer;
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         IF 'p_lnk_val' IN (SELECT * FROM unnest(par_value_source_types) AS z) OR 'p_lnk_dflt' IN (SELECT * FROM unnest(par_value_source_types) AS z) THEN
             il_itera_cfgs:= ARRAY[] :: t_configs_tree_rel[];
             il_accum_cfgs:= ARRAY[] :: t_configs_tree_rel[];
@@ -706,10 +712,9 @@ BEGIN
             END LOOP;
         END IF;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN il_accum_cfgs;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION subconfigparams_lnks_extraction(
                 par_cfgs_tree          t_configs_tree_rel[]
@@ -725,7 +730,10 @@ CREATE OR REPLACE FUNCTION related_sub_cfgs_ofcfg(
                               , par_recusive           boolean
                               , par_value_source_types t_cfg_tree_rel_type[]
                               , par_accum              t_configs_tree_rel[]
-                              ) RETURNS t_configs_tree_rel[] AS $$
+                              ) RETURNS t_configs_tree_rel[]
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         start_cfg_tr  sch_<<$app_name$>>.t_configs_tree_rel;
         add_cfg_trs   sch_<<$app_name$>>.t_configs_tree_rel[];
@@ -755,11 +763,7 @@ DECLARE
 
         depth_changed_for     sch_<<$app_name$>>.t_configs_tree_rel[];
         depth_changed_for_new sch_<<$app_name$>>.t_configs_tree_rel[];
-
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info:= sch_<<$app_name$>>.enter_schema_namespace();
-
         start_cfg_tr:= par_cfg_tr;
 
         sub_results:= par_accum;
@@ -936,10 +940,9 @@ BEGIN
                 ORDER BY x_.cycle_detected ASC, x_.super_ce_id, x_.super_cfg_id, x_.sub_ce_id, x_.sub_cfg_id, x_.depth DESC
             );
         END IF;
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN sub_results;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION related_sub_cfgs_ofcfg(
                                 par_cfg_tr             t_configs_tree_rel
@@ -960,7 +963,10 @@ CREATE OR REPLACE FUNCTION related_super_cfgs_ofcfg(
                               , par_recusive           boolean
                               , par_value_source_types t_cfg_tree_rel_type[]
                               , par_accum              t_configs_tree_rel[]
-                              ) RETURNS t_configs_tree_rel[] AS $$
+                              ) RETURNS t_configs_tree_rel[]
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         start_cfg_tr  sch_<<$app_name$>>.t_configs_tree_rel;
         add_cfg_trs   sch_<<$app_name$>>.t_configs_tree_rel[];
@@ -976,11 +982,7 @@ DECLARE
         m  integer;
         idx integer;
         rec RECORD;
-
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info:= sch_<<$app_name$>>.enter_schema_namespace();
-
         start_cfg_tr:= par_cfg_tr;
 
         super_results:= par_accum;
@@ -1054,10 +1056,9 @@ BEGIN
                 END LOOP;
         END IF;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN super_results;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION related_super_cfgs_ofcfg(
                                 par_cfg_tr             t_configs_tree_rel
@@ -1077,7 +1078,10 @@ CREATE OR REPLACE FUNCTION related_cfgs_ofcfg(
                                 par_config_key               t_config_key
                               , par_mode                     integer
                               , par_populate_subconfig_links boolean
-                              ) RETURNS t_configs_tree_rel[] AS $$
+                              ) RETURNS t_configs_tree_rel[]
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE mode1 integer;
         mode2 integer;
         start_cfg    sch_<<$app_name$>>.t_config_key;
@@ -1085,8 +1089,6 @@ DECLARE mode1 integer;
         rel_types    sch_<<$app_name$>>.t_cfg_tree_rel_type[];
         start_cfg_tr sch_<<$app_name$>>.t_configs_tree_rel;
         cpl          sch_<<$app_name$>>.t_config_completeness_check_result;
-
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
         IF par_mode IS NULL THEN
                 RAISE EXCEPTION 'Exception in "related_cfgs_ofcfg"! Mode is not allowed to be NULL!';
@@ -1096,7 +1098,6 @@ BEGIN
         results:= ARRAY[] :: sch_<<$app_name$>>.t_configs_tree_rel[];
         IF par_mode = 0 THEN RETURN results;
         END IF;
-        namespace_info:= sch_<<$app_name$>>.enter_schema_namespace();
 
         mode1:=     par_mode / 10;  -- super-
         mode2:= mod(par_mode , 10); -- sub-
@@ -1121,10 +1122,9 @@ BEGIN
         IF mode1 > 0 THEN results:=            related_super_cfgs_ofcfg(start_cfg_tr, mode1 > 1, rel_types, ARRAY[] :: t_configs_tree_rel[]); END IF;
         IF mode2 > 0 THEN results:= results || related_sub_cfgs_ofcfg  (start_cfg_tr, mode2 > 1, rel_types, ARRAY[] :: t_configs_tree_rel[]); END IF;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN results;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION related_cfgs_ofcfg(
                                 par_config_key               t_config_key
@@ -1150,21 +1150,20 @@ CREATE OR REPLACE FUNCTION configs_that_use_subconfig(
                                 par_config_key t_config_key
                               , par_recursive boolean
                               , par_populate_subconfig_links boolean
-                              ) RETURNS t_configs_tree_rel[] AS $$
+                              ) RETURNS t_configs_tree_rel[]
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         g sch_<<$app_name$>>.t_config_key;
         r sch_<<$app_name$>>.t_configs_tree_rel[];
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         g:= optimize_configkey(par_config_key);
         r:= related_cfgs_ofcfg(g, 10 + 10 * (par_recursive :: integer), par_populate_subconfig_links);
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 --------------------------------------------------------------------------
 
@@ -1172,7 +1171,10 @@ CREATE OR REPLACE FUNCTION configs_that_rely_on_confentity_default(
                                 par_confentity_code_id integer
                               , par_recursive boolean
                               , par_populate_subconfig_links boolean
-                              ) RETURNS t_configs_tree_rel[] AS $$
+                              ) RETURNS t_configs_tree_rel[]
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         rec RECORD;
         target_cfg_id   varchar := NULL;
@@ -1181,10 +1183,7 @@ DECLARE
         q sch_<<$app_name$>>.t_configs_tree_rel[];
         r sch_<<$app_name$>>.t_configs_tree_rel[];
         rel_types    sch_<<$app_name$>>.t_cfg_tree_rel_type[];
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         SELECT ce.default_configuration_id, c.complete_isit
         INTO target_cfg_id, target_complete
         FROM configurable_entities AS ce
@@ -1196,7 +1195,6 @@ BEGIN
         IF target_cfg_id IS NULL THEN
                 r:= ARRAY[] :: t_configs_tree_rel[];
 
-                PERFORM leave_schema_namespace(namespace_info);
                 RETURN r;
         ELSE
                 rel_types:= cfg_tree_rel_main_types_set(par_populate_subconfig_links);
@@ -1231,11 +1229,10 @@ BEGIN
                         END LOOP;
                 END IF;
 
-                PERFORM leave_schema_namespace(namespace_info);
                 RETURN r;
         END IF;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 --------------------------------------------------------------------------
 
@@ -1243,17 +1240,17 @@ CREATE OR REPLACE FUNCTION configs_that_use_subconfentity(
                                 par_subconfentity_code_id integer
                               , par_recursive boolean
                               , par_populate_subconfig_links boolean
-                              ) RETURNS t_configs_tree_rel[] AS $$
+                              ) RETURNS t_configs_tree_rel[]
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         rec RECORD;
         p sch_<<$app_name$>>.t_configs_tree_rel;
         q sch_<<$app_name$>>.t_configs_tree_rel[];
         r sch_<<$app_name$>>.t_configs_tree_rel[];
         rel_types    sch_<<$app_name$>>.t_cfg_tree_rel_type[];
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         r:= ARRAY(
                 SELECT mk_configs_tree_rel(
                                 c.confentity_code_id
@@ -1287,10 +1284,9 @@ BEGIN
                 END LOOP;
         END IF;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 -------------------------------------------------------------------------------
 
@@ -1298,7 +1294,10 @@ CREATE OR REPLACE FUNCTION configs_related_with_confentity(
                                 par_confentity_id integer
                               , par_recursive     boolean
                               , par_populate_subconfig_links boolean
-                              ) RETURNS t_configs_tree_rel[] AS $$
+                              ) RETURNS t_configs_tree_rel[]
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         target_ce_id integer;
         rec RECORD;
@@ -1306,10 +1305,7 @@ DECLARE
         q sch_<<$app_name$>>.t_configs_tree_rel[];
         r sch_<<$app_name$>>.t_configs_tree_rel[];
         rel_types    sch_<<$app_name$>>.t_cfg_tree_rel_type[];
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         q:= ARRAY(
                 SELECT mk_configs_tree_rel(
                                 par_confentity_id
@@ -1341,20 +1337,18 @@ BEGIN
                 END LOOP;
         END IF;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 -------------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION cfg_tree_2_cfgs(par_cfg_tree t_configs_tree_rel[]) RETURNS t_config_key[] AS $$
+CREATE OR REPLACE FUNCTION cfg_tree_2_cfgs(par_cfg_tree t_configs_tree_rel[]) RETURNS t_config_key[]
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE r sch_<<$app_name$>>.t_config_key[];
-
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         r:= ARRAY( SELECT make_configkey_bystr(cfg_ts.super_ce_id, cfg_ts.super_cfg_id)
                    FROM unnest(par_cfg_tree) as cfg_ts
                    UNION
@@ -1373,10 +1367,9 @@ BEGIN
                        , mc.config_id ASC
         );
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 -------------------------------------------------------------------------------
 
@@ -1389,7 +1382,10 @@ CREATE TYPE t_analyzed_cfgs_set AS (
 );
 
 -- bad style programming here
-CREATE OR REPLACE FUNCTION analyze_cfgs_tree(par_config_tree t_configs_tree_rel[], par_exclude_cfg t_config_key, par_asc_depth boolean) RETURNS t_analyzed_cfgs_set AS $$
+CREATE OR REPLACE FUNCTION analyze_cfgs_tree(par_config_tree t_configs_tree_rel[], par_exclude_cfg t_config_key, par_asc_depth boolean) RETURNS t_analyzed_cfgs_set
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         exclud_cfg   sch_<<$app_name$>>.t_config_key;
         sub          sch_<<$app_name$>>.t_config_key;
@@ -1417,12 +1413,10 @@ DECLARE
         first_itera boolean;
         first_layer boolean;
 
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
         IF par_asc_depth IS NULL THEN
                 RAISE EXCEPTION 'Parameter "par_asc_depth" isn''t allowed to be NULL.';
         END IF;
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
 
         work_set:= par_config_tree;
         r:= ROW ( ARRAY[] :: t_config_key[]
@@ -1620,10 +1614,9 @@ BEGIN
                 IF l = 0 THEN l:= COALESCE(array_length(next_layer, 1), 0); END IF;
         END LOOP;
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN r;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 COMMENT ON FUNCTION analyze_cfgs_tree(par_config_tree t_configs_tree_rel[], par_exclude_cfg t_config_key, par_asc_depth boolean) IS
 'Makes a set of "t_config_key" from a set of "t_configs_tree_rel".
@@ -1640,9 +1633,9 @@ Performance is poor, if there are big gaps between depths, due to specific order
 -- GRANTS
 
 -- Reference functions:
-GRANT EXECUTE ON FUNCTION finvalsrc2cfgtreerel(par_finvalsrc t_cpvalue_final_source)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION finvalsrcEQcfgtreerel(par_finvalsrc t_cpvalue_final_source, par_cfgtreerel t_cfg_tree_rel_type)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION cfg_tree_rel_main_types_set(par_with_lnks boolean)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION finvalsrc2cfgtreerel(par_finvalsrc t_cpvalue_final_source)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION finvalsrcEQcfgtreerel(par_finvalsrc t_cpvalue_final_source, par_cfgtreerel t_cfg_tree_rel_type)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION cfg_tree_rel_main_types_set(par_with_lnks boolean)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION mk_configs_tree_rel(
         par_super_ce_id    integer
       , par_super_cfg_id   varchar
@@ -1656,57 +1649,62 @@ GRANT EXECUTE ON FUNCTION mk_configs_tree_rel(
       , par_cycle_detected boolean
       , par_super_complete t_config_completeness_check_result
       , par_sub_complete   t_config_completeness_check_result
-      )TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION show_cfgtreerow_path(par_configs_tree t_configs_tree_rel)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+      )TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION show_cfgtreerow_path(par_configs_tree t_configs_tree_rel)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
 -- Analytic functions:
-GRANT EXECUTE ON FUNCTION cfg_idx_in_list(par_configkey t_config_key, par_config_list t_config_key[])TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION cfg_tree_2_cfgs(par_cfg_tree t_configs_tree_rel[])TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION analyze_cfgs_tree(par_config_tree t_configs_tree_rel[], par_exclude_cfg t_config_key, par_asc_depth boolean)TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION cfg_idx_in_list(par_configkey t_config_key, par_config_list t_config_key[])TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION cfg_tree_2_cfgs(par_cfg_tree t_configs_tree_rel[])TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION analyze_cfgs_tree(par_config_tree t_configs_tree_rel[], par_exclude_cfg t_config_key, par_asc_depth boolean)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
 -- Lookup functions:
-GRANT EXECUTE ON FUNCTION super_cfgs_of(par_config_key t_config_key, par_value_source_types t_cfg_tree_rel_type[])TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION sub_cfgs_of(par_config_key t_config_key, par_value_source_types t_cfg_tree_rel_type[])TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION super_cfgs_of(par_config_tree_entry t_configs_tree_rel, par_value_source_types t_cfg_tree_rel_type[])TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION sub_cfgs_of(par_config_tree_entry t_configs_tree_rel, par_value_source_types t_cfg_tree_rel_type[])TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION subconfigparams_lnks_extraction(par_cfgs_tree t_configs_tree_rel[], par_value_source_types t_cfg_tree_rel_type[])TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION super_cfgs_of(par_config_key t_config_key, par_value_source_types t_cfg_tree_rel_type[])TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION sub_cfgs_of(par_config_key t_config_key, par_value_source_types t_cfg_tree_rel_type[])TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION super_cfgs_of(par_config_tree_entry t_configs_tree_rel, par_value_source_types t_cfg_tree_rel_type[])TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION sub_cfgs_of(par_config_tree_entry t_configs_tree_rel, par_value_source_types t_cfg_tree_rel_type[])TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION subconfigparams_lnks_extraction(par_cfgs_tree t_configs_tree_rel[], par_value_source_types t_cfg_tree_rel_type[])TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION related_super_cfgs_ofcfg(
                                 par_cfg_tr             t_configs_tree_rel
                               , par_recusive           boolean
                               , par_value_source_types t_cfg_tree_rel_type[]
                               , par_accum              t_configs_tree_rel[]
-                              ) TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+                              ) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION related_sub_cfgs_ofcfg(
                                 par_cfg_tr             t_configs_tree_rel
                               , par_recusive           boolean
                               , par_value_source_types t_cfg_tree_rel_type[]
                               , par_accum              t_configs_tree_rel[]
-                              ) TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+                              ) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION related_cfgs_ofcfg(
         par_config_key               t_config_key
       , par_mode                     integer
       , par_populate_subconfig_links boolean
-      )TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+      )TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION configs_that_use_subconfig(
         par_config_key t_config_key
       , par_recursive boolean
       , par_populate_subconfig_links boolean
-      )TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+      )TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION configs_that_rely_on_confentity_default(
         par_confentity_code_id integer
       , par_recursive boolean
       , par_populate_subconfig_links boolean
-      )TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+      )TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION configs_that_use_subconfentity(
         par_subconfentity_code_id integer
       , par_recursive boolean
       , par_populate_subconfig_links boolean
-      )TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+      )TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION configs_related_with_confentity(
         par_confentity_id integer
       , par_recursive     boolean
       , par_populate_subconfig_links boolean
-      )TO user_<<$app_name$>>_data_admin, user_<<$app_name$>>_data_reader;
+      )TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
 -- Administration functions:
 -- none
+
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+
+\echo NOTICE >>>>> config_tree.init.sql [END]

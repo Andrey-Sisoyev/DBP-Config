@@ -2,22 +2,23 @@
 --
 -- All rights reserved.
 --
--- For information about license see COPYING file in the root directory of current nominal package
+-- For license and copyright information, see the file COPYRIGHT
 
 --------------------------------------------------------------------------
 --------------------------------------------------------------------------
 
 -- (1) case sensetive (2) postgres lowercases real names
-\c <<$db_name$>> user_<<$app_name$>>_owner
+\c <<$db_name$>> user_db<<$db_name$>>_app<<$app_name$>>_owner
 
-SET search_path TO sch_<<$app_name$>>, public; -- sets only for current session
+SET search_path TO sch_<<$app_name$>>; -- , comn_funs, public; -- sets only for current session
+
+\echo NOTICE >>>>> functions.drop.sql [BEGIN]
 
 -------------------------------------------------------------------------------
 -------------------------------------------------------------------------------
 -------------------------------------------------------------------------------
 
-\echo NOTICE >>>>> functions.drop.sql
-
+-- Top level functions and types
 -- DROP FUNCTION IF EXISTS ...
 -- DROP TYPE     IF EXISTS ...
 
@@ -32,15 +33,11 @@ DROP FUNCTION IF EXISTS update_cfgs_ondepmodify(par_deps_list t_configs_tree_rel
 -------------------------------------------------------------------------------
 -------------------------------------------------------------------------------
 
-\echo NOTICE >>>>> completeness.drop.sql
+\echo NOTICE >>>>> functions.drop.sql [END]
+
 \i functions/completeness.drop.sql
-\echo NOTICE >>>>> configs_tree.drop.sql
 \i functions/configs_tree.drop.sql
-\echo NOTICE >>>>> configparam.drop.sql
 \i functions/configparam.drop.sql
-\echo NOTICE >>>>> confentityparam.drop.sql
 \i functions/confentityparam.drop.sql
-\echo NOTICE >>>>> config.drop.sql
 \i functions/config.drop.sql
-\echo NOTICE >>>>> confentity.drop.sql
 \i functions/confentity.drop.sql

@@ -501,12 +501,15 @@ SELECT unset_confparam_value(
 
 \echo >>>>>>>>>>>> MEGACHECKs <<<<<<<<<<<<<<
 
-\c <<$db_name$>> user_<<$app_name$>>_owner
+\c <<$db_name$>> user_db<<$db_name$>>_app<<$app_name$>>_owner
 
 SET search_path TO sch_<<$app_name$>>, public;
 \set ECHO none
 
-CREATE OR REPLACE FUNCTION pkg_<<$app_name$>>__test_errorcases(par_tc_type integer) RETURNS varchar AS $$
+CREATE OR REPLACE FUNCTION pkg_<<$pkg.name_p$>>_<<$pkg.ver_p$>>__test_errorcases(par_tc_type integer) RETURNS varchar
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
 DECLARE
         i integer;
         l integer;
@@ -515,10 +518,7 @@ DECLARE
         nn_errorred  integer := 0;
         not_errorred integer := 0;
         report varchar;
-        namespace_info sch_<<$app_name$>>.t_namespace_info;
 BEGIN
-        namespace_info := sch_<<$app_name$>>.enter_schema_namespace();
-
         CASE par_tc_type
             WHEN 1 THEN
                 FOR t_cv IN
@@ -575,14 +575,13 @@ BEGIN
 
         report:= 'Failed to raise exception: ' || not_errorred || E'\nRaised "null_value_not_allowed": ' || nn_errorred || E'\nRaised other exception: ' || oth_errorred || E'\nSum: ' || (oth_errorred + not_errorred + nn_errorred);
 
-        PERFORM leave_schema_namespace(namespace_info);
         RETURN report;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
-GRANT EXECUTE ON FUNCTION pkg_<<$app_name$>>__test_errorcases(par_tc_type integer) TO user_<<$app_name$>>_data_admin;
+GRANT EXECUTE ON FUNCTION pkg_<<$pkg.name_p$>>_<<$pkg.ver_p$>>__test_errorcases(par_tc_type integer) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
 
-\c <<$db_name$>> user_<<$app_name$>>_data_admin
+\c <<$db_name$>> user_db<<$db_name$>>_app<<$app_name$>>_data_admin
 
 SET search_path TO sch_<<$app_name$>>, public;
 \set ECHO queries
@@ -624,7 +623,7 @@ FROM ( SELECT determine_finvalue_by_cop(
 
 \echo NOTICE >>>>>>>>>>>> MEGACHECK >TC1.#2 <<<<<<<<<<<<<<
 
-SELECT pkg_<<$app_name$>>__test_errorcases(1);
+SELECT pkg_<<$pkg.name_p$>>_<<$pkg.ver_p$>>__test_errorcases(1);
 
 \echo NOTICE >>>>>>>>>>>> MEGACHECK >TC2: N/A
 
@@ -675,15 +674,15 @@ FROM ( SELECT determine_finvalue_by_cop(
 
 \echo NOTICE >>>>>>>>>>>> MEGACHECK >TC4.#2 <<<<<<<<<<<<<<
 
-SELECT pkg_<<$app_name$>>__test_errorcases(4);
+SELECT pkg_<<$pkg.name_p$>>_<<$pkg.ver_p$>>__test_errorcases(4);
 
 -----------------------------------------------------------
 
-\c <<$db_name$>> user_<<$app_name$>>_owner
+\c <<$db_name$>> user_db<<$db_name$>>_app<<$app_name$>>_owner
 
-DROP FUNCTION sch_<<$app_name$>>.pkg_<<$app_name$>>__test_errorcases(par_tc_type integer);
+DROP FUNCTION sch_<<$app_name$>>.pkg_<<$pkg.name_p$>>_<<$pkg.ver_p$>>__test_errorcases(par_tc_type integer);
 
-\c <<$db_name$>> user_<<$app_name$>>_data_admin
+\c <<$db_name$>> user_db<<$db_name$>>_app<<$app_name$>>_data_admin
 SET search_path TO sch_<<$app_name$>>, public;
 \set ECHO queries
 SELECT set_config('client_min_messages', 'NOTICE', FALSE);
