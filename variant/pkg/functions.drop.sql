@@ -26,9 +26,10 @@ SET search_path TO sch_<<$app_name$>>; -- , comn_funs, public; -- sets only for 
 DROP FUNCTION IF EXISTS read_cfgmngsys_setup();
 DROP FUNCTION IF EXISTS read_cfgmngsys_setup__output_credel_notices();
 DROP FUNCTION IF EXISTS read_cfgmngsys_setup__perform_completness_routines();
+DROP FUNCTION IF EXISTS read_cfgmngsys_setup__autoadd_lnged_cfgs();
 
 -- Administration functions:
-DROP FUNCTION IF EXISTS update_cfgs_ondepmodify(par_deps_list t_configs_tree_rel[], par_exclude_cfg t_config_key);
+DROP FUNCTION IF EXISTS update_cfgs_ondepmodify(par_deps_list t_configs_tree_rel[], par_exclude_cfg t_config_key, par_val_lng_id integer);
 
 -------------------------------------------------------------------------------
 -------------------------------------------------------------------------------

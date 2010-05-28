@@ -148,9 +148,9 @@ CREATE OR REPLACE FUNCTION make_configparamkey_bystr3(par_confentity_str varchar
         SELECT ROW(sch_<<$app_name$>>.make_configkey_bystr2($1, $2), $3, FALSE) :: sch_<<$app_name$>>.t_configparam_key;
 $$ LANGUAGE SQL IMMUTABLE;
 
-CREATE OR REPLACE FUNCTION make_cop_from_cep(par_confparam_key t_confentityparam_key, par_config_id varchar, par_cfg_lnged boolean) RETURNS t_configparam_key AS $$
+CREATE OR REPLACE FUNCTION make_cop_from_cep(par_confparam_key t_confentityparam_key, par_config_id varchar, par_cfg_lnged boolean, par_lng_of_value t_code_key_by_lng) RETURNS t_configparam_key AS $$
         SELECT sch_<<$app_name$>>.make_configparamkey(
-                        sch_<<$app_name$>>.make_configkey(($1).confentity_key, $2, $3)
+                        sch_<<$app_name$>>.make_configkey(($1).confentity_key, $2, $3, $4)
                       , ($1).param_key
                       , ($1).param_key_is_lnged
                       ) :: sch_<<$app_name$>>.t_configparam_key;
@@ -215,7 +215,13 @@ BEGIN
                 RAISE EXCEPTION 'An error occurred in the "optimized_cop_isit" function! Argument is not allowed to have NULL in ".config_key"!';
         END IF;
 
-        r:= NOT par_configparam_key.param_key_is_lnged AND sch_<<$app_name$>>.optimized_configkey_isit(par_configparam_key.config_key);
+        SELECT CASE par_configparam_key.param_key_is_lnged
+                   WHEN FALSE THEN
+                       sch_<<$app_name$>>.optimized_configkey_isit(par_configparam_key.config_key)
+                   ELSE FALSE
+               END
+        INTO r;
+
         RETURN r;
 END;
 $$;
@@ -226,7 +232,7 @@ CREATE OR REPLACE FUNCTION optimize_configparamkey(par_configparam_key t_configp
 SET search_path = sch_<<$app_name$>> -- , comn_funs, public
 LANGUAGE plpgsql
 AS $$
-DECLARE cop            sch_<<$app_name$>>.t_configparam_key;
+DECLARE cop sch_<<$app_name$>>.t_configparam_key;
 BEGIN
         IF sch_<<$app_name$>>.optimized_cop_isit(par_configparam_key) THEN
                 RETURN par_configparam_key;
@@ -241,9 +247,10 @@ BEGIN
                         optimize_confentityparamkey(make_cep_from_cop(cop), FALSE)
                       , (cop.config_key).config_id
                       , FALSE
+                      , (cop.config_key).config_lng
                       );
 
-        RETURN cop ;
+        RETURN cop;
 END;
 $$;
 
@@ -260,6 +267,8 @@ DECLARE
         cparam   sch_<<$app_name$>>.t_cparameter_uni;
         r        sch_<<$app_name$>>.t_cparameter_value_uni;
         rec      RECORD;
+        cnt      integer;
+        v        varchar;
 BEGIN
         cop := optimize_configparamkey(par_configparam_key);
 
@@ -271,15 +280,24 @@ BEGIN
 
         CASE pt
             WHEN 'leaf' THEN
-                SELECT mk_cpvalue_l(cpv_l.value) AS r1
-                INTO rec
-                FROM configurations_parameters_values__leafs AS cpv_l
-                WHERE cpv_l.configuration_id   = (cop.config_key).config_id
-                  AND cpv_l.confentity_code_id = code_id_of_confentitykey((cop.config_key).confentity_key)
-                  AND cpv_l.parameter_id       = cop.param_key;
-
-                cval:= rec.r1;
-
+                CASE codekeyl_type((cop.config_key).config_lng)
+                    WHEN 'undef' THEN
+                        SELECT mk_cpvalue_l(cpv_l.value, NULL :: integer) AS r1
+                        INTO rec
+                        FROM configurations_parameters_values__leafs AS cpv_l
+                        WHERE cpv_l.configuration_id   = (cop.config_key).config_id
+                          AND cpv_l.confentity_code_id = code_id_of_confentitykey((cop.config_key).confentity_key)
+                          AND cpv_l.parameter_id       = cop.param_key;
+                    WHEN 'c_id' THEN
+                        SELECT cpv_l.value
+                        INTO v
+                        FROM configurations_parameters_lngvalues__leafs AS cplv_l
+                        WHERE cpv_l.configuration_id   = (cop.config_key).config_id
+                          AND cpv_l.value_lng_code_id  = (((cop.config_key).config_lng).code_key).code_id
+                          AND cpv_l.confentity_code_id = code_id_of_confentitykey((cop.config_key).confentity_key)
+                          AND cpv_l.parameter_id       = cop.param_key;
+                        rec.r1:= mk_cpvalue_l(v, cpv_l.value_lng_code_id);
+                END CASE;
             WHEN 'subconfig' THEN
                 SELECT mk_cpvalue_s(
                                cpv_s.subconfiguration_id
@@ -291,13 +309,10 @@ BEGIN
                 WHERE cpv_s.configuration_id   = (cop.config_key).config_id
                   AND cpv_s.confentity_code_id = code_id_of_confentitykey((cop.config_key).confentity_key)
                   AND cpv_s.parameter_id       = cop.param_key;
-
-                cval:= rec.r1;
-
             ELSE RAISE EXCEPTION 'An error occurred in function "determine_cvalue_of_cop" for key: %! Unsupported parameter type: "%".', show_confentity_paramvalue(cop ), pt;
         END CASE;
 
-        r:= mk_cparameter_value(cparam, cval, NULL :: varchar, NULL :: t_cpvalue_final_source, pt);
+        r:= mk_cparameter_value(cparam, rec.r1, NULL :: varchar, NULL :: t_cpvalue_final_source, pt);
 
         RETURN r;
 END;
@@ -332,6 +347,7 @@ DECLARE
         lnk_param_id varchar;
         cur_parar_id varchar;
         new_lnk_buf  varchar[];
+        rows_cnt     integer;
 BEGIN
         r:= par_cparamvalue;
         r.final_value:= NULL;
@@ -362,14 +378,49 @@ BEGIN
                     END IF;
                 END IF;
 
-                IF    value_source = 'null'
-                  AND (par_cparamvalue.param_base).use_default_instead_of_null = 'par_d'
-                  AND (NOT isnull_cpvalue((par_cparamvalue.param_base).default_value, FALSE))
-                THEN
-                    IF ((par_cparamvalue.param_base).default_value).value IS NOT NULL THEN
-                        value_source:= 'cp_dflt';
-                        val:= ((par_cparamvalue.param_base).default_value).value;
-                    END IF;
+                IF value_source = 'null' THEN
+                     IF (par_cparamvalue.value).lng_code_id IS NULL THEN
+                             IF    (par_cparamvalue.param_base).use_default_instead_of_null = 'par_d'
+                               AND (NOT isnull_cpvalue((par_cparamvalue.param_base).default_value, FALSE)) THEN
+                                    IF ((par_cparamvalue.param_base).default_value).value IS NOT NULL THEN
+                                        value_source:= 'cp_dflt';
+                                        val:= ((par_cparamvalue.param_base).default_value).value;
+                                    END IF;
+                             END IF;
+                     ELSE
+                             CASE (par_cparamvalue.param_base).lnged_paramvalue_dflt_src
+                                 WHEN 'param_dflt' THEN
+                                     IF    (par_cparamvalue.param_base).use_default_instead_of_null = 'par_d'
+                                       AND (NOT isnull_cpvalue((par_cparamvalue.param_base).default_value, FALSE)) THEN
+                                            IF ((par_cparamvalue.param_base).default_value).value IS NOT NULL THEN
+                                                value_source:= 'cp_dflt';
+                                                val:= ((par_cparamvalue.param_base).default_value).value;
+                                            END IF;
+                                     END IF;
+                                 WHEN 'nonlnged_val', 'pdflt_w_nonlng_null' THEN
+                                     SELECT cpv_l.value
+                                     INTO val
+                                     FROM configurations_parameters_values__leafs AS cpv_l
+                                     WHERE cpv_l.configuration_id   = (cop.config_key).config_id
+                                       AND cpv_l.confentity_code_id = code_id_of_confentitykey((cop.config_key).confentity_key)
+                                       AND cpv_l.parameter_id       = cop.param_key;
+
+                                     GET DIAGNOSTICS rows_cnt = ROW_COUNT;
+
+                                     IF rows_cnt != 0 THEN
+                                         value_source:= 'cpv';
+                                     ELSIF (par_cparamvalue.param_base).lnged_paramvalue_dflt_src = 'pdflt_w_nonlng_null' THEN
+                                         IF    (par_cparamvalue.param_base).use_default_instead_of_null = 'par_d'
+                                           AND (NOT isnull_cpvalue((par_cparamvalue.param_base).default_value, FALSE)) THEN
+                                                IF ((par_cparamvalue.param_base).default_value).value IS NOT NULL THEN
+                                                    value_source:= 'cp_dflt';
+                                                    val:= ((par_cparamvalue.param_base).default_value).value;
+                                                END IF;
+                                         END IF;
+                                     END IF;
+                                 WHEN 'null' THEN -- do nothing
+                             END CASE;
+                     END IF;
                 END IF;
 
             WHEN 'subconfig' THEN
@@ -600,7 +651,7 @@ COMMENT ON FUNCTION get_paramvalues(par_allow_null_values boolean, par_config_ke
 --------------------------------------------------------------------------
 --------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION set_confparam_value(par_configparam_key t_configparam_key, par_cpvalue t_cpvalue_uni, par_overwrite integer) RETURNS integer
+CREATE OR REPLACE FUNCTION set_confparam_value(par_configparam_key t_configparam_key, par_cpvalue t_cpvalue_uni, par_overwrite integer, par_lng_autoadd boolean) RETURNS integer
 SET search_path = sch_<<$app_name$>> -- , comn_funs, public
 LANGUAGE plpgsql
 AS $$
@@ -609,11 +660,16 @@ DECLARE
         test boolean;
         rows_cnt_add   integer;
         rows_cnt_accum integer;
+        target_ce_id   integer;
         old_val varchar;
         sce_id  integer;
         old_lnk varchar;
         old_lnk_usage  sch_<<$app_name$>>.t_subconfig_value_linking_read_rule;
+        ct t_code_key_type;
 BEGIN
+        IF par_lng_autoadd IS NULL THEN
+                RAISE EXCEPTION 'An error occurred in function "set_confparam_value"! Parameter "par_lng_autoadd" is not allowed to be NULL.', par_overwrite;
+        END IF;
         IF par_overwrite NOT IN (0,1,10) THEN
                 RAISE EXCEPTION 'An error occurred in function "set_confparam_value"! Wrong mode specified in "par_overwrite" parameter: %.', par_overwrite;
         END IF;
@@ -624,14 +680,27 @@ BEGIN
         rows_cnt_accum:= 0;
 
         g:= optimize_configparamkey(par_configparam_key);
+        target_ce_id:= code_id_of_confentitykey((g.config_key).confentity_key);
         CASE par_cpvalue.type
             WHEN 'leaf' THEN
-                SELECT cpv_l.value
-                INTO old_val
-                FROM configurations_parameters_values__leafs AS cpv_l
-                WHERE cpv_l.confentity_code_id = code_id_of_confentitykey((g.config_key).confentity_key)
-                  AND cpv_l.configuration_id   = (g.config_key).config_id
-                  AND cpv_l.parameter_id       = g.param_key;
+                ct:= codekeyl_type((g.config_key).config_lng);
+                CASE ct
+                    WHEN 'undef' THEN
+                        SELECT cpv_l.value
+                        INTO old_val
+                        FROM configurations_parameters_values__leafs AS cpv_l
+                        WHERE cpv_l.confentity_code_id = target_ce_id
+                          AND cpv_l.configuration_id   = (g.config_key).config_id
+                          AND cpv_l.parameter_id       = g.param_key;
+                    WHEN 'c_id' THEN
+                        SELECT cpv_l.value
+                        INTO old_val
+                        FROM configurations_parameters_lngvalues__leafs AS cpv_l
+                        WHERE cpv_l.confentity_code_id = target_ce_id
+                          AND cpv_l.configuration_id   = (g.config_key).config_id
+                          AND cpv_l.parameter_id       = g.param_key
+                          AND cpv_l.value_lng_code_id  = (((g.config_key).config_lng).code_key).code_id;
+                END CASE;
 
                 GET DIAGNOSTICS rows_cnt_add = ROW_COUNT;
 
@@ -639,7 +708,7 @@ BEGIN
                         SELECT TRUE
                         INTO test
                         FROM configurations_parameters__leafs AS cp_l
-                        WHERE cp_l.confentity_code_id = code_id_of_confentitykey((g.config_key).confentity_key)
+                        WHERE cp_l.confentity_code_id = target_ce_id
                           AND cp_l.parameter_id       = g.param_key;
 
                         GET DIAGNOSTICS rows_cnt_add = ROW_COUNT;
@@ -648,22 +717,82 @@ BEGIN
                                 RAISE EXCEPTION 'Exception raised by the "set_confparam_value" function for key %! Confentity parameter-leaf not found!', show_configparamkey(par_configparam_key);
                         END IF;
 
-                        INSERT INTO configurations_parameters_values__leafs (confentity_code_id, configuration_id, parameter_id, value)
-                        VALUES ( code_id_of_confentitykey((g.config_key).confentity_key)
-                               , (g.config_key).config_id
-                               , g.param_key
-                               , par_cpvalue.value
-                               );
+                        CASE ct
+                            WHEN 'undef' THEN
+                                INSERT INTO configurations_parameters_values__leafs (confentity_code_id, configuration_id, parameter_id, value)
+                                VALUES ( code_id_of_confentitykey((g.config_key).confentity_key)
+                                       , (g.config_key).config_id
+                                       , g.param_key
+                                       , par_cpvalue.value
+                                       );
+                            WHEN 'c_id' THEN
+                                SELECT TRUE
+                                INTO test
+                                FROM configurations_bylngs AS c
+                                WHERE c.confentity_code_id = target_ce_id
+                                  AND c.configuration_id   = (g.config_key).config_id
+                                  AND c.values_lng_code_id = (((g.config_key).config_lng).code_key).code_id;
+
+                                GET DIAGNOSTICS rows_cnt_add = ROW_COUNT;
+
+                                IF rows_cnt_add = 0 THEN
+                                    IF par_lng_autoadd THEN
+                                        PERFORM add_languaged_config(g.config_key, (g.config_key).config_lng);
+                                    ELSE
+                                        RAISE EXCEPTION 'Exception raised by the "set_confparam_value" function for key %! Confentity parameter-leaf not found!', show_configparamkey(par_configparam_key);
+                                    END IF;
+                                END IF;
+
+                                SELECT TRUE
+                                INTO test
+                                FROM configurations_parameters_values__leafs
+                                WHERE cpv_l.confentity_code_id = target_ce_id
+                                  AND cpv_l.configuration_id   = (g.config_key).config_id
+                                  AND cpv_l.parameter_id       = g.param_key;
+
+                                GET DIAGNOSTICS rows_cnt_add = ROW_COUNT;
+
+                                IF rows_cnt_add = 0 THEN
+                                        INSERT INTO configurations_parameters_values__leafs(
+                                                          confentity_code_id
+                                                        , configuration_id
+                                                        , parameter_id
+                                                        , value
+                                                        )
+                                                 VALUES ( target_ce_id
+                                                        , (g.config_key).config_id
+                                                        , g.param_key
+                                                        , NULL :: varchar
+                                                        );
+                                END IF;
+
+                                INSERT INTO configurations_parameters_lngvalues__leafs (confentity_code_id, configuration_id, value_lng_code_id, parameter_id, value)
+                                VALUES ( code_id_of_confentitykey((g.config_key).confentity_key)
+                                       , (g.config_key).config_id
+                                       , (((g.config_key).config_lng).code_key).code_id
+                                       , g.param_key
+                                       , par_cpvalue.value
+                                       );
+                        END CASE;
 
                         GET DIAGNOSTICS rows_cnt_add = ROW_COUNT;
                 ELSE -- rows_cnt_add = 1
                         IF (par_overwrite = 1) OR (old_val IS NULL) THEN
-                                UPDATE configurations_parameters_values__leafs AS cpv_l
-                                SET value = par_cpvalue.value
-                                WHERE cpv_l.confentity_code_id = code_id_of_confentitykey((g.config_key).confentity_key)
-                                  AND cpv_l.configuration_id   = (g.config_key).config_id
-                                  AND cpv_l.parameter_id       = g.param_key;
-
+                                CASE ct
+                                    WHEN 'undef' THEN
+                                        UPDATE configurations_parameters_values__leafs AS cpv_l
+                                        SET value = par_cpvalue.value
+                                        WHERE cpv_l.confentity_code_id = code_id_of_confentitykey((g.config_key).confentity_key)
+                                          AND cpv_l.configuration_id   = (g.config_key).config_id
+                                          AND cpv_l.parameter_id       = g.param_key;
+                                    WHEN 'c_id' THEN
+                                        UPDATE configurations_parameters_lngvalues__leafs AS cpv_l
+                                        SET value = par_cpvalue.value
+                                        WHERE cpv_l.confentity_code_id = code_id_of_confentitykey((g.config_key).confentity_key)
+                                          AND cpv_l.configuration_id   = (g.config_key).config_id
+                                          AND cpv_l.parameter_id       = g.param_key
+                                          AND cpv_l.value_lng_code_id  = (((g.config_key).config_lng).code_key).code_id;
+                                END CASE;
                                 GET DIAGNOSTICS rows_cnt_add = ROW_COUNT;
                         ELSIF par_overwrite = 10 THEN
                                 RAISE EXCEPTION 'Exception raised by the "set_confparam_value" function! Confparam value is already set - overwriting is restricted.';
@@ -743,20 +872,23 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION set_confparam_value(par_configparam_key t_configparam_key, par_cpvalue t_cpvalue_uni, par_overwrite integer) IS '
+COMMENT ON FUNCTION set_confparam_value(par_configparam_key t_configparam_key, par_cpvalue t_cpvalue_uni, par_overwrite integer, par_lng_autoadd boolean) IS '
 Returns number of rows modified.
 Parameter "par_overwrite" values:
 **  0 restrict overwrite - silent
 ** 10 restrict overwrite - raise exception
 **  1          overwrite
 No special overwrite permission is needed in case, when entry for confparam value is persistent (in the "configurations_parameters_values__...") table, but value there is NULL - this case is assumed to be "no value".
+
+If parameter "par_lng_autoadd" is TRUE, then if languaged value is set and according languaged configuration doesn''t persist, it is created atomatically using "add_languaged_config" function. The completeness of newly created languaged config is FALSE, and completeness-as-regulator is NULL!
+For FALSE in similar situation exception is rised.
 ';
 
 -----------------------
 
 CREATE TYPE t_paramvals__short AS (param_id varchar, value t_cpvalue_uni);
 
-CREATE OR REPLACE FUNCTION set_confparam_values_set(par_config t_config_key, par_pv_set t_paramvals__short[], par_overwrite integer) RETURNS integer
+CREATE OR REPLACE FUNCTION set_confparam_values_set(par_config t_config_key, par_pv_set t_paramvals__short[], par_overwrite integer, par_lng_autoadd boolean) RETURNS integer
 SET search_path = sch_<<$app_name$>> -- , comn_funs, public
 LANGUAGE plpgsql
 AS $$
@@ -779,7 +911,10 @@ BEGIN
                 SELECT mk_cparameter_value(
                           ROW(x.*) :: t_cparameter_uni
                         , CASE x.type
-                              WHEN 'leaf'      THEN mk_cpvalue_l(((ROW(y.*) :: t_paramvals__short).value).value)
+                              WHEN 'leaf'      THEN mk_cpvalue_l(
+                                                          ((ROW(y.*) :: t_paramvals__short).value).value
+                                                        , ((ROW(y.*) :: t_paramvals__short).value).lng_code_id
+                                                        )
                               WHEN 'subconfig' THEN mk_cpvalue_s(
                                                           ((ROW(y.*) :: t_paramvals__short).value).value
                                                         , ((ROW(y.*) :: t_paramvals__short).value).subcfg_ref_param_id
@@ -801,6 +936,7 @@ BEGIN
                         make_configparamkey(g, ((ROW(x.*) :: t_cparameter_value_uni).param_base).param_id, FALSE)
                       , (ROW(x.*) :: t_cparameter_value_uni).value
                       , par_overwrite
+                      , par_lng_autoadd
                   )   )
         INTO rows_accum
         FROM unnest(cfg_params_vals) AS x; -- t_cparameter_value_uni
@@ -809,7 +945,7 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION set_confparam_values_set(par_config t_config_key, par_pv_set t_paramvals__short[], par_overwrite integer) IS
+COMMENT ON FUNCTION set_confparam_values_set(par_config t_config_key, par_pv_set t_paramvals__short[], par_overwrite integer, par_lng_autoadd boolean) IS
 'Returns number of rows modified.
 Parameter "par_overwrite" values:
 **  0 restrict overwrite (silent)          - if at least 1 parameter was to be overwritten, the whole operation is cancelled
@@ -841,9 +977,9 @@ BEGIN
 
         target_confentity_id:= code_id_of_confentitykey(g);
 
-        cfg:= make_configkey(g, par_config_id, FALSE);
+        cfg:= make_configkey(g, par_config_id, FALSE, make_codekeyl_null());
 
-        rows_count_add:= set_confparam_values_set(cfg, par_paramvalues_set, 10);
+        rows_count_add:= set_confparam_values_set(cfg, par_paramvalues_set, 10, FALSE);
         rows_count_accum:= rows_count_accum + rows_count_add;
 
         RETURN rows_count_accum;
@@ -876,10 +1012,19 @@ BEGIN
 
         CASE pv.type
             WHEN 'leaf' THEN
-                DELETE FROM configurations_parameters_values__leafs AS cpv_l
-                WHERE cpv_l.confentity_code_id = code_id_of_confentitykey((g.config_key).confentity_key)
-                  AND cpv_l.configuration_id   = (g.config_key).config_id
-                  AND cpv_l.parameter_id       = g.param_key;
+                CASE codekeyl_type((g.config_key).config_lng)
+                    WHEN 'undef' THEN
+                        DELETE FROM configurations_parameters_values__leafs AS cpv_l
+                        WHERE cpv_l.confentity_code_id = code_id_of_confentitykey((g.config_key).confentity_key)
+                          AND cpv_l.configuration_id   = (g.config_key).config_id
+                          AND cpv_l.parameter_id       = g.param_key;
+                    WHEN 'c_id' THEN
+                        DELETE FROM configurations_parameters_lngvalues__leafs AS cpv_l
+                        WHERE cpv_l.confentity_code_id = code_id_of_confentitykey((g.config_key).confentity_key)
+                          AND cpv_l.configuration_id   = (g.config_key).config_id
+                          AND cpv_l.parameter_id       = g.param_key
+                          AND cpv_l.value_lng_code_id  = (((g.config_key).config_lng).code_key).code_id;
+                END CASE;
             WHEN 'subconfig' THEN
                 DELETE FROM configurations_parameters_values__subconfigs AS cpv_s
                 WHERE cpv_s.confentity_code_id    = code_id_of_confentitykey((g.config_key).confentity_key)
@@ -936,7 +1081,7 @@ GRANT EXECUTE ON FUNCTION make_configparamkey(par_config_key t_config_key, param
 GRANT EXECUTE ON FUNCTION make_configparamkey_null()TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION make_configparamkey_bystr2(par_confentity_id integer , par_config_id varchar, par_param_key varchar)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION make_configparamkey_bystr3(par_confentity_str varchar, par_config_id varchar, par_param_key varchar)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION make_cop_from_cep(par_confparam_key t_confentityparam_key, par_config_id varchar, par_cfg_lnged boolean)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION make_cop_from_cep(par_confparam_key t_confentityparam_key, par_config_id varchar, par_cfg_lnged boolean, par_lng_of_value t_code_key_by_lng)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION make_cep_from_cop(par_configparam_key t_configparam_key)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION configparamkey_is_null(par_configparam_key t_configparam_key, par_total boolean)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION show_configparamkey(par_configparam_key t_configparam_key)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
@@ -973,8 +1118,8 @@ GRANT EXECUTE ON FUNCTION get_paramvalues(
 
 
 -- Administration functions:
-GRANT EXECUTE ON FUNCTION set_confparam_value(par_configparam_key t_configparam_key, par_cpvalue t_cpvalue_uni, par_overwrite integer) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
-GRANT EXECUTE ON FUNCTION set_confparam_values_set(par_config t_config_key, par_pv_set t_paramvals__short[], par_overwrite integer) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
+GRANT EXECUTE ON FUNCTION set_confparam_value(par_configparam_key t_configparam_key, par_cpvalue t_cpvalue_uni, par_overwrite integer, par_lng_autoadd boolean) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
+GRANT EXECUTE ON FUNCTION set_confparam_values_set(par_config t_config_key, par_pv_set t_paramvals__short[], par_overwrite integer, par_lng_autoadd boolean) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
 GRANT EXECUTE ON FUNCTION new_config(
                 par_ifdoesnt_exist  boolean
               , par_confentity_key  t_confentity_key

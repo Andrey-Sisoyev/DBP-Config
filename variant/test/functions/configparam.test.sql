@@ -28,9 +28,10 @@ SELECT mk_cparameter_value(
                 , TRUE
                 , 'par_d'
                 , 123
-                , mk_cpvalue_l('asd')
+                , 'nonlnged_val'
+                , mk_cpvalue_l('asd', NULL :: integer)
                 )
-        , mk_cpvalue_l('asd')
+        , mk_cpvalue_l('asd', NULL :: integer)
         , 'asd'
         , NULL :: t_cpvalue_final_source
         , NULL :: t_confparam_type
@@ -44,9 +45,10 @@ SELECT mk_cparameter_value(
                 , TRUE
                 , 'par_d'
                 , 123
-                , mk_cpvalue_l('asd')
+                , 'nonlnged_val'
+                , mk_cpvalue_l('asd', NULL :: integer)
                 )
-        , mk_cpvalue_l('asd')
+        , mk_cpvalue_l('asd', NULL :: integer)
         , 'asd'
         , NULL :: t_cpvalue_final_source
         , 'leaf'
@@ -60,9 +62,10 @@ SELECT mk_cparameter_value(
                 , TRUE
                 , 'par_d'
                 , 123
-                , mk_cpvalue_l('asd')
+                , 'nonlnged_val'
+                , mk_cpvalue_l('asd', NULL :: integer)
                 )
-        , mk_cpvalue_l('asd')
+        , mk_cpvalue_l('asd', NULL :: integer)
         , 'asd'
         , NULL :: t_cpvalue_final_source
         , 'leaf'
@@ -77,9 +80,10 @@ SELECT mk_cparameter_value(
                 , TRUE
                 , 'par_d'
                 , 123
+                , NULL :: t_lnged_paramvalue_dflt_src
                 , mk_cpvalue_s('asd', 'asd', 'no_lnk')
                 )
-        , mk_cpvalue_l('asd')
+        , mk_cpvalue_l('asd', NULL :: integer)
         , 'asd'
         , NULL :: t_cpvalue_final_source
         , 'leaf'
@@ -94,7 +98,8 @@ SELECT mk_cparameter_value(
                 , TRUE
                 , 'par_d'
                 , 123
-                , mk_cpvalue_l('asd')
+                , 'nonlnged_val'
+                , mk_cpvalue_l('asd', NULL :: integer)
                 )
         , mk_cpvalue_s('asd', 'asd', 'no_lnk')
         , 'asd'
@@ -111,9 +116,10 @@ SELECT mk_cparameter_value(
                 , TRUE
                 , 'par_d'
                 , 123
-                , mk_cpvalue_l('asd')
+                , 'nonlnged_val'
+                , mk_cpvalue_l('asd', NULL :: integer)
                 )
-        , mk_cpvalue_l('asd')
+        , mk_cpvalue_l('asd', NULL :: integer)
         , 'asd'
         , NULL :: t_cpvalue_final_source
         , 'subconfig'
@@ -127,9 +133,10 @@ SELECT mk_cparameter_value(
                 , TRUE
                 , 'par_d'
                 , 123
-                , mk_cpvalue_l('asd')
+                , 'nonlnged_val'
+                , mk_cpvalue_l('asd', NULL :: integer)
                 )
-        , mk_cpvalue_l('asd')
+        , mk_cpvalue_l('asd', NULL :: integer)
         , 'asd'
         , NULL :: t_cpvalue_final_source
         , 'leaf'
@@ -146,9 +153,10 @@ SELECT get_param_from_list(
                                 , TRUE
                                 , 'par_d'
                                 , 123
-                                , mk_cpvalue_l('asd')
+                                , 'nonlnged_val'
+                                , mk_cpvalue_l('asd', NULL :: integer)
                                 )
-                        , mk_cpvalue_l('asd')
+                        , mk_cpvalue_l('asd', NULL :: integer)
                         , 'asd'
                         , NULL :: t_cpvalue_final_source
                         , 'leaf'
@@ -161,9 +169,10 @@ SELECT get_param_from_list(
                                 , TRUE
                                 , 'par_d'
                                 , 123
-                                , mk_cpvalue_l('asd')
+                                , 'nonlnged_val'
+                                , mk_cpvalue_l('asd', NULL :: integer)
                                 )
-                        , mk_cpvalue_l('asd')
+                        , mk_cpvalue_l('asd', NULL :: integer)
                         , 'asd'
                         , NULL :: t_cpvalue_final_source
                         , 'leaf'
@@ -182,9 +191,10 @@ SELECT get_param_from_list(
                                 , TRUE
                                 , 'par_d'
                                 , 123
-                                , mk_cpvalue_l('asd')
+                                , 'nonlnged_val'
+                                , mk_cpvalue_l('asd', NULL :: integer)
                                 )
-                        , mk_cpvalue_l('asd')
+                        , mk_cpvalue_l('asd', NULL :: integer)
                         , 'asd'
                         , NULL :: t_cpvalue_final_source
                         , 'leaf'
@@ -197,9 +207,10 @@ SELECT get_param_from_list(
                                 , TRUE
                                 , 'par_d'
                                 , 123
-                                , mk_cpvalue_l('asd')
+                                , 'nonlnged_val'
+                                , mk_cpvalue_l('asd', NULL :: integer)
                                 )
-                        , mk_cpvalue_l('asd')
+                        , mk_cpvalue_l('asd', NULL :: integer)
                         , 'asd'
                         , NULL :: t_cpvalue_final_source
                         , 'leaf'
@@ -221,6 +232,7 @@ SELECT show_configparamkey(
                 make_confentityparamkey(make_confentitykey(make_codekeyl(make_codekey(NULL :: integer, 'rus'), make_codekey(NULL :: integer, 'Болванка_1_КС'))), 'болванка_1_парам_1', TRUE)
               , 'Болванка_1_КФГ'
               , TRUE
+              , make_codekeyl_null()
               )
        );
 SELECT show_confentityparamkey(
@@ -229,6 +241,7 @@ SELECT show_confentityparamkey(
                 make_confentityparamkey(make_confentitykey(make_codekeyl(make_codekey(NULL :: integer, 'rus'), make_codekey(NULL :: integer, 'Болванка_1_КС'))), 'болванка_1_парам_1', TRUE)
               , 'Dummy_1_CFG'
               , FALSE
+              , make_codekeyl_null()
               )
           )
        );
@@ -238,6 +251,7 @@ SELECT show_configparamkey(
                 make_confentityparamkey_null()
               , 'Dummy_1_CFG'
               , FALSE
+              , make_codekeyl_null()
               )
        );
 SELECT show_confentityparamkey(
@@ -291,17 +305,18 @@ SELECT show_configparamkey(
              )
            , 'Болванка_1_КФГ'
            , TRUE
+           , make_codekeyl_null()
        ) ) );
-SELECT show_configparamkey(optimize_configparamkey(make_cop_from_cep(make_confentityparamkey(make_confentitykey(make_codekeyl(make_codekey(NULL :: integer, 'rus'), make_codekey(NULL :: integer, 'Болванка_1_КС'))), 'болванка_1_парам_1', FALSE), 'Болванка_1_КФГ', TRUE)));
-SELECT show_configparamkey(optimize_configparamkey(make_cop_from_cep(make_confentityparamkey(make_confentitykey(make_codekeyl(make_codekey(NULL :: integer, 'rus'), make_codekey(NULL :: integer, 'Болванка_1_КС'))), 'dummy_1_param_1', FALSE), 'Dummy_1_CFG', FALSE)));
+SELECT show_configparamkey(optimize_configparamkey(make_cop_from_cep(make_confentityparamkey(make_confentitykey(make_codekeyl(make_codekey(NULL :: integer, 'rus'), make_codekey(NULL :: integer, 'Болванка_1_КС'))), 'болванка_1_парам_1', FALSE), 'Болванка_1_КФГ', TRUE, make_codekeyl_null())));
+SELECT show_configparamkey(optimize_configparamkey(make_cop_from_cep(make_confentityparamkey(make_confentitykey(make_codekeyl(make_codekey(NULL :: integer, 'rus'), make_codekey(NULL :: integer, 'Болванка_1_КС'))), 'dummy_1_param_1', FALSE), 'Dummy_1_CFG', FALSE, make_codekeyl_null())));
 \echo >>>>>> param not found error
-SELECT show_configparamkey(optimize_configparamkey(make_cop_from_cep(make_confentityparamkey(make_confentitykey(make_codekeyl(make_codekey(NULL :: integer, 'rus'), make_codekey(NULL :: integer, 'Болванка_1_КС'))), 'dummy_1_param_1', TRUE), 'Dummy_1_CFG', FALSE)));
+SELECT show_configparamkey(optimize_configparamkey(make_cop_from_cep(make_confentityparamkey(make_confentitykey(make_codekeyl(make_codekey(NULL :: integer, 'rus'), make_codekey(NULL :: integer, 'Болванка_1_КС'))), 'dummy_1_param_1', TRUE), 'Dummy_1_CFG', FALSE, make_codekeyl_null())));
 
 ------------------------
 
 SELECT determine_cvalue_of_cop(make_configparamkey(make_configkey_bystr2('Dummy_1_CE', 'Dummy_1_CFG'), 'dummy_1_param_1', FALSE));
-SELECT determine_cvalue_of_cop(make_cop_from_cep(make_confentityparamkey(make_confentitykey(make_codekeyl(make_codekey(NULL :: integer, 'rus'), make_codekey(NULL :: integer, 'Болванка_1_КС'))), 'болванка_1_парам_1', TRUE), 'Болванка_1_КФГ', TRUE));
-SELECT determine_cvalue_of_cop(make_cop_from_cep(make_confentityparamkey(make_confentitykey(make_codekeyl(make_codekey(NULL :: integer, 'rus'), make_codekey(NULL :: integer, 'Болванка_1_КС'))), 'болванка_1_парам_1', TRUE), 'Dummy_1_CFG', FALSE));
+SELECT determine_cvalue_of_cop(make_cop_from_cep(make_confentityparamkey(make_confentitykey(make_codekeyl(make_codekey(NULL :: integer, 'rus'), make_codekey(NULL :: integer, 'Болванка_1_КС'))), 'болванка_1_парам_1', TRUE), 'Болванка_1_КФГ', TRUE, make_codekeyl_null()));
+SELECT determine_cvalue_of_cop(make_cop_from_cep(make_confentityparamkey(make_confentitykey(make_codekeyl(make_codekey(NULL :: integer, 'rus'), make_codekey(NULL :: integer, 'Болванка_1_КС'))), 'болванка_1_парам_1', TRUE), 'Dummy_1_CFG', FALSE, make_codekeyl_null()));
 
 ------------------------
 
@@ -318,13 +333,13 @@ SELECT determine_value_of_cvalue(
               );
 SELECT determine_value_of_cvalue(
                 TRUE
-              , determine_cvalue_of_cop(make_cop_from_cep(make_confentityparamkey(make_confentitykey(make_codekeyl(make_codekey(NULL :: integer, 'rus'), make_codekey(NULL :: integer, 'Болванка_1_КС'))), 'болванка_1_парам_11', TRUE), 'Болванка_1_КФГ', TRUE))
+              , determine_cvalue_of_cop(make_cop_from_cep(make_confentityparamkey(make_confentitykey(make_codekeyl(make_codekey(NULL :: integer, 'rus'), make_codekey(NULL :: integer, 'Болванка_1_КС'))), 'болванка_1_парам_11', TRUE), 'Болванка_1_КФГ', TRUE, make_codekeyl_null()))
               , make_configkey_bystr2('Dummy_1_CE', 'Dummy_1_CFG')
               );
 \echo >>>>>> null not allowed in param_11 error
 SELECT determine_value_of_cvalue(
                 FALSE
-              , determine_cvalue_of_cop(make_cop_from_cep(make_confentityparamkey(make_confentitykey(make_codekeyl(make_codekey(NULL :: integer, 'rus'), make_codekey(NULL :: integer, 'Болванка_1_КС'))), 'болванка_1_парам_11', TRUE), 'Болванка_1_КФГ', TRUE))
+              , determine_cvalue_of_cop(make_cop_from_cep(make_confentityparamkey(make_confentitykey(make_codekeyl(make_codekey(NULL :: integer, 'rus'), make_codekey(NULL :: integer, 'Болванка_1_КС'))), 'болванка_1_парам_11', TRUE), 'Болванка_1_КФГ', TRUE, make_codekeyl_null()))
               , make_configkey_bystr2('Dummy_1_CE', 'Dummy_1_CFG')
               );
 SELECT determine_value_of_cvalue(
@@ -366,34 +381,40 @@ SELECT get_paramvalues(
 \echo >>>>>> wrong value type error
 SELECT set_confparam_value(
                 make_configparamkey_bystr3('Dummy_1_CE', 'Dummy_1_CFG', 'dummy_1_param_1')
-              , mk_cpvalue_l('asd')
+              , mk_cpvalue_l('asd', NULL :: integer)
               , 10
+              , FALSE
               );
 SELECT set_confparam_value(
                 make_configparamkey_bystr3('Dummy_1_CE', 'Dummy_1_CFG', 'dummy_1_param_1')
               , mk_cpvalue_s('Dummy_2_CFG_2', NULL :: varchar, 'no_lnk')
               , 10
+              , FALSE
               );
 \echo >>>>>> overwrite restricted error
 SELECT set_confparam_value(
                 make_configparamkey_bystr3('Dummy_1_CE', 'Dummy_1_CFG', 'dummy_1_param_1')
               , mk_cpvalue_s('Dummy_2_CFG', NULL :: varchar, 'no_lnk')
               , 10
+              , FALSE
               );
 SELECT set_confparam_value(
                 make_configparamkey_bystr3('Dummy_1_CE', 'Dummy_1_CFG', 'dummy_1_param_1')
               , mk_cpvalue_s('Dummy_2_CFG', NULL :: varchar, 'no_lnk')
               , 1
+              , FALSE
               );
 SELECT set_confparam_value(
                 make_configparamkey_bystr3('Dummy_1_CE', 'Dummy_1_CFG', 'dummy_1_param_1')
               , mk_cpvalue_s('Dummy_2_CFG_2', NULL :: varchar, 'no_lnk')
               , 1
+              , FALSE
               );
 SELECT set_confparam_value(
                 make_configparamkey_bystr3('Dummy_1_CE', 'Dummy_1_CFG', 'dummy_1_param_11')
               , mk_cpvalue_s('Dummy_2_CFG_2', NULL :: varchar, 'no_lnk')
               , 1
+              , FALSE
               );
 
 SELECT get_paramvalues(
@@ -405,11 +426,13 @@ SELECT set_confparam_value(
                 make_configparamkey_bystr3('Dummy_1_CE', 'Dummy_1_CFG', 'dummy_1_param_1')
               , mk_cpvalue_s('Dummy_2_CFG', NULL :: varchar, 'no_lnk')
               , 1
+              , FALSE
               );
 SELECT set_confparam_value(
                 make_configparamkey_bystr3('Dummy_1_CE', 'Dummy_1_CFG', 'dummy_1_param_11')
               , mk_cpvalue_s(NULL :: varchar, 'dummy_1_param_1', 'alw_onl_lnk')
               , 1
+              , FALSE
               );
 
 SELECT get_paramvalues(
@@ -427,10 +450,11 @@ SELECT set_confparam_values_set(
                           , mk_cpvalue_s(NULL :: varchar, 'dummy_1_param_1', 'whn_vnull_lnk')
                           )
                      , ROW( 'dummy_1_param_2'
-                          , mk_cpvalue_l('asfsfsdfsdf1111111111')
+                          , mk_cpvalue_l('asfsfsdfsdf1111111111', NULL :: integer)
                           )
                 ] :: t_paramvals__short[]
               , 1
+              , FALSE
               );
 \echo >>>>>> IL cycle error
 SELECT get_paramvalues(
@@ -444,10 +468,11 @@ SELECT set_confparam_values_set(
                           , mk_cpvalue_s('Dummy_2_CFG_2', 'dummy_1_param_1', 'whn_vnull_lnk')
                           )
                      , ROW( 'dummy_1_param_2'
-                          , mk_cpvalue_l('2222222222222222sdfsd2222')
+                          , mk_cpvalue_l('2222222222222222sdfsd2222', NULL :: integer)
                           )
                 ] :: t_paramvals__short[]
               , 1
+              , FALSE
               );
 SELECT get_paramvalues(
           FALSE

@@ -70,7 +70,7 @@ BEGIN
                   , 'Dummy_2_CFG_2'
                   );
 
-        PERFORM set_confentity_default(make_configkey(make_confentitykey_bystr('Dummy_1_CE'), 'Dummy_1_CFG', FALSE), FALSE);
+        PERFORM set_confentity_default(make_configkey(make_confentitykey_bystr('Dummy_1_CE'), 'Dummy_1_CFG', FALSE, make_codekeyl_null()), FALSE);
         PERFORM add_confentity_names(
                           make_confentitykey_bystr('Dummy_1_CE')
                         , ARRAY[
@@ -115,6 +115,7 @@ BEGIN
                                 , TRUE
                                 , 'par_d'
                                 , dummy_2_ce_id
+                                , 'nonlnged_val'
                                 , mk_cpvalue_s(
                                         'Dummy_2_CFG'
                                       , NULL :: varchar
@@ -128,7 +129,8 @@ BEGIN
                                 , TRUE
                                 , 'par_d'
                                 , NULL :: integer
-                                , mk_cpvalue_l('Yo!')
+                                , 'nonlnged_val'
+                                , mk_cpvalue_l('Yo!', NULL :: integer)
                                 )
                        , mk_cparameter_uni(
                                   'dummy_1_param_11'
@@ -137,6 +139,7 @@ BEGIN
                                 , FALSE
                                 , 'par_d'
                                 , dummy_2_ce_id
+                                , 'nonlnged_val'
                                 , mk_cpvalue_null()
                                 )
                   ] :: t_cparameter_uni[]
@@ -321,7 +324,7 @@ BEGIN
                                       mk_cparameter_uni(
                                         'a0__a1', 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , FALSE, 'par_d', get_confentity_id('TC1_1_A1')
+                                      , FALSE, 'par_d', get_confentity_id('TC1_1_A1'), NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_s('TC1_1_A1_CFG', NULL :: varchar, 'no_lnk')
                                       )
                                   ]
@@ -333,7 +336,7 @@ BEGIN
                                       mk_cparameter_uni(
                                         'a1__e1', 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , FALSE, 'par_d', get_confentity_id('TC1_1_E1')
+                                      , FALSE, 'par_d', get_confentity_id('TC1_1_E1'), NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_s('TC1_1_E1_CFG', NULL :: varchar, 'no_lnk')
                                       )
                                   ]
@@ -345,7 +348,7 @@ BEGIN
                                       mk_cparameter_uni(
                                         'a2__e1', 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , FALSE, 'par_d', get_confentity_id('TC1_1_E1')
+                                      , FALSE, 'par_d', get_confentity_id('TC1_1_E1'), NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_s('TC1_1_E1_CFG', NULL :: varchar, 'no_lnk')
                                       )
                                   ]
@@ -357,7 +360,7 @@ BEGIN
                                       mk_cparameter_uni(
                                         'd1__e1', 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , FALSE, 'par_d', get_confentity_id('TC1_1_E1')
+                                      , FALSE, 'par_d', get_confentity_id('TC1_1_E1'), NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_s('TC1_1_E1_CFG', NULL :: varchar, 'no_lnk')
                                       )
                                   ]
@@ -369,7 +372,7 @@ BEGIN
                                       mk_cparameter_uni(
                                         'd2__e1', 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , FALSE, 'par_d', get_confentity_id('TC1_1_E1')
+                                      , FALSE, 'par_d', get_confentity_id('TC1_1_E1'), NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_s('TC1_1_E1_CFG', NULL :: varchar, 'no_lnk')
                                       )
                                   ]
@@ -381,13 +384,13 @@ BEGIN
                                       mk_cparameter_uni(
                                         'e1__f1', 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , FALSE, 'par_d', get_confentity_id('TC1_1_F1')
+                                      , FALSE, 'par_d', get_confentity_id('TC1_1_F1'), NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_s('TC1_1_F1_CFG', NULL :: varchar, 'no_lnk')
                                       )
                                     , mk_cparameter_uni(
                                         'e1__f2', 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , FALSE, 'par_d', get_confentity_id('TC1_1_F2')
+                                      , FALSE, 'par_d', get_confentity_id('TC1_1_F2'), NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_s('TC1_1_F2_CFG', NULL :: varchar, 'no_lnk')
                                       )
                                   ]
@@ -399,7 +402,7 @@ BEGIN
                                       mk_cparameter_uni(
                                         'f1__i1', 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , FALSE, 'par_d', get_confentity_id('TC1_1_I1')
+                                      , FALSE, 'par_d', get_confentity_id('TC1_1_I1'), NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_s('TC1_1_I1_CFG', NULL :: varchar, 'no_lnk')
                                       )
                                   ]
@@ -411,7 +414,7 @@ BEGIN
                                       mk_cparameter_uni(
                                         'f2__i2', 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , FALSE, 'par_d', get_confentity_id('TC1_1_I2')
+                                      , FALSE, 'par_d', get_confentity_id('TC1_1_I2'), NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_s('TC1_1_I2_CFG', NULL :: varchar, 'no_lnk')
                                       )
                                   ]
@@ -423,7 +426,7 @@ BEGIN
                                       mk_cparameter_uni(
                                         'i1__k1', 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , FALSE, 'par_d', get_confentity_id('TC1_1_K1')
+                                      , FALSE, 'par_d', get_confentity_id('TC1_1_K1'), NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_s('TC1_1_K1_CFG', NULL :: varchar, 'no_lnk')
                                       )
                                   ]
@@ -436,7 +439,7 @@ BEGIN
                                       mk_cparameter_uni(
                                         'i2__m2', 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , FALSE, 'par_d', get_confentity_id('TC1_1_M2')
+                                      , FALSE, 'par_d', get_confentity_id('TC1_1_M2'), NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_s('TC1_1_M2_CFG', NULL :: varchar, 'no_lnk')
                                       )
                                   ]
@@ -448,19 +451,19 @@ BEGIN
                                       mk_cparameter_uni(
                                         'k1__l1', 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , FALSE, 'par_d', get_confentity_id('TC1_1_L1')
+                                      , FALSE, 'par_d', get_confentity_id('TC1_1_L1'), NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_s('TC1_1_L1_CFG', NULL :: varchar, 'no_lnk')
                                       )
                                     , mk_cparameter_uni(
                                         'k1__l2', 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , FALSE, 'par_d', get_confentity_id('TC1_1_L2')
+                                      , FALSE, 'par_d', get_confentity_id('TC1_1_L2'), NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_s('TC1_1_L2_CFG', NULL :: varchar, 'no_lnk')
                                       )
                                     , mk_cparameter_uni(
                                         'k1__m2', 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , FALSE, 'par_d', get_confentity_id('TC1_1_M2')
+                                      , FALSE, 'par_d', get_confentity_id('TC1_1_M2'), NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_s('TC1_1_M2_CFG', NULL :: varchar, 'no_lnk')
                                       )
                                   ]
@@ -472,7 +475,7 @@ BEGIN
                                       mk_cparameter_uni(
                                         'l1__m1', 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , FALSE, 'par_d', get_confentity_id('TC1_1_M1')
+                                      , FALSE, 'par_d', get_confentity_id('TC1_1_M1'), NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_s('TC1_1_M1_CFG', NULL :: varchar, 'no_lnk')
                                       )
                                   ]
@@ -484,7 +487,7 @@ BEGIN
                                       mk_cparameter_uni(
                                         'l2__m2', 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , FALSE, 'par_d', get_confentity_id('TC1_1_M2')
+                                      , FALSE, 'par_d', get_confentity_id('TC1_1_M2'), NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_s('TC1_1_M2_CFG', NULL :: varchar, 'no_lnk')
                                       )
                                   ]
@@ -508,6 +511,7 @@ BEGIN
                                                       , TRUE
                                                       , 'par_d'
                                                       , sub_ce_id
+                                                      , NULL :: t_lnged_paramvalue_dflt_src
                                                       , mk_cpvalue_s(
                                                                 CASE t_cv.refed_param_has_value
                                                                     WHEN TRUE THEN t_cv.sub_ce_name || '__CFG_0'
@@ -527,6 +531,7 @@ BEGIN
                                                       , t_cv.final_null_allowed
                                                       , t_cv.use_dflt
                                                       , sub_ce_id
+                                                      , NULL :: t_lnged_paramvalue_dflt_src
                                                       , CASE (t_cv.param_dflt_value_persistance OR t_cv.param_dflt_lnk_persistance)
                                                             WHEN FALSE THEN NULL :: t_cpvalue_uni
                                                             ELSE mk_cpvalue_s(
@@ -600,6 +605,7 @@ BEGIN
                                         'a' || t_cv.side_idx || '__b' || t_cv.id, 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
                                       , FALSE, 'par_d', get_confentity_id('TC1_' || t_cv.testcase_id || '_B' || t_cv.id)
+                                      , NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_s('TC1_' || t_cv.testcase_id || '_B' || t_cv.id || '__CFG_0', NULL :: varchar, 'no_lnk')
                                       )
                                   ]
@@ -612,6 +618,7 @@ BEGIN
                                         'f' || t_cv.side_idx || '__g' || t_cv.id, 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
                                       , FALSE, 'par_d', get_confentity_id('TC1_' || t_cv.testcase_id || '_G' || t_cv.id)
+                                      , NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_s('TC1_' || t_cv.testcase_id || '_G' || t_cv.id || '__CFG_0', NULL :: varchar, 'no_lnk')
                                       )
                                   ]
@@ -624,6 +631,7 @@ BEGIN
                                         'c' || t_cv.id || '__d' || t_cv.side_idx, 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
                                       , FALSE, 'par_d', get_confentity_id('TC1_' || t_cv.testcase_id || '_D' || t_cv.side_idx)
+                                      , NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_s('TC1_' || t_cv.testcase_id || '_D' || t_cv.side_idx || '_CFG', NULL :: varchar, 'no_lnk')
                                       )
                                   ]
@@ -636,6 +644,7 @@ BEGIN
                                         'h' || t_cv.id || '__i' || t_cv.side_idx, 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
                                       , FALSE, 'par_d', get_confentity_id('TC1_' || t_cv.testcase_id || '_I' || t_cv.side_idx)
+                                      , NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_s('TC1_' || t_cv.testcase_id || '_I' || t_cv.side_idx || '_CFG', NULL :: varchar, 'no_lnk')
                                       )
                                   ]
@@ -734,6 +743,7 @@ BEGIN
                                               , FALSE
                                               , 'sce_d'
                                               , get_confentity_id('TC2_' || UPPER(t_r.sub_ce) || '_' || t_r.testcase_id)
+                                              , NULL :: t_lnged_paramvalue_dflt_src
                                               , mk_cpvalue_null()
                                               )
                                 ] :: t_cparameter_uni[]
@@ -753,6 +763,7 @@ BEGIN
                                               , FALSE
                                               , 'par_d'
                                               , get_confentity_id('TC2_' || UPPER(t_r.sub_ce) || '_' || t_r.testcase_id)
+                                              , NULL :: t_lnged_paramvalue_dflt_src
                                               , mk_cpvalue_s(
                                                         'TC2_' || UPPER(t_r.sub_ce) || '_' || t_r.testcase_id || '_CFG1'
                                                       , NULL :: varchar
@@ -845,7 +856,7 @@ BEGIN
                                       mk_cparameter_uni(
                                         'par_link_chain_terminat', 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , TRUE, 'par_d', sub_id
+                                      , TRUE, 'par_d', sub_id, NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_s(
                                                 'TC3_201_sub_CFG'
                                               , NULL :: varchar
@@ -867,7 +878,7 @@ BEGIN
                                       mk_cparameter_uni(
                                         'par_' || r.id, 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , r.final_null_allowed, r.use_dflt, sub_id
+                                      , r.final_null_allowed, r.use_dflt, sub_id, NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_s(
                                                 CASE r.param_dflt_value_persistance
                                                     WHEN FALSE THEN NULL :: varchar
@@ -906,6 +917,7 @@ BEGIN
                                               )
                                         ] :: t_paramvals__short[]
                                       , 10
+                                      , FALSE
                                       );
                      END IF;
                 END LOOP;
@@ -916,7 +928,7 @@ BEGIN
                                       mk_cparameter_uni(
                                         'par_first_lnk', 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , TRUE, 'par_d', sub_id
+                                      , TRUE, 'par_d', sub_id, NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_s(
                                                 NULL :: varchar
                                               , 'par_' || last_par
@@ -1003,11 +1015,12 @@ BEGIN
                                                ELSE ARRAY[t_cv.param_cnstr_2]
                                            END
                                         )
-                                      , t_cv.final_null_allowed, t_cv.use_dflt, NULL :: integer
-                                      , mk_cpvalue_l(CASE t_cv.param_dflt_value_persistance
-                                                         WHEN FALSE THEN NULL :: varchar
-                                                         ELSE '"default value"'
-                                                     END
+                                      , t_cv.final_null_allowed, t_cv.use_dflt, NULL :: integer, 'nonlnged_val'
+                                      , mk_cpvalue_l( CASE t_cv.param_dflt_value_persistance
+                                                          WHEN FALSE THEN NULL :: varchar
+                                                          ELSE '"default value"'
+                                                      END
+                                                    , NULL :: integer
                                                     )
                                       )
                                   ]
@@ -1020,14 +1033,16 @@ BEGIN
                                 make_configkey_bystr(super_id, 'TC4_301_CFG')
                               , ARRAY[
                                    ROW( 'par_' || t_cv.id
-                                      , mk_cpvalue_l(CASE t_cv.value_persistance
-                                                         WHEN FALSE THEN NULL :: varchar
-                                                         ELSE '"specified value"'
-                                                     END
+                                      , mk_cpvalue_l( CASE t_cv.value_persistance
+                                                          WHEN FALSE THEN NULL :: varchar
+                                                          ELSE '"specified value"'
+                                                      END
+                                                    , NULL :: integer
                                                     )
                                       )
                                 ] :: t_paramvals__short[]
                               , 10
+                              , FALSE
                               )
                 FROM test4__cparameters_values AS t_cv
                 WHERE t_cv.testcase_id = par_tc_id;
@@ -1126,26 +1141,26 @@ BEGIN
                                       mk_cparameter_uni(
                                         'a_e', 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , FALSE, 'sce_d', get_confentity_id('TC5_E_401')
+                                      , FALSE, 'sce_d', get_confentity_id('TC5_E_401'), NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_null()
                                       )
                                     , mk_cparameter_uni(
                                         'a_f', 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , FALSE, 'sce_d', get_confentity_id('TC5_F_401')
+                                      , FALSE, 'sce_d', get_confentity_id('TC5_F_401'), NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_null()
                                       )
                                     , mk_cparameter_uni(
                                         'a_1', 'leaf'
                                       , ARRAY[mk_confparam_constraint('1=1'), mk_confparam_constraint('$1=''correct value''')] :: t_confparam_constraint[]
-                                      , FALSE, 'no_d', NULL :: integer
+                                      , FALSE, 'no_d', NULL :: integer, 'nonlnged_val'
                                       , mk_cpvalue_null()
                                       )
                                     , mk_cparameter_uni(
                                         'a_2', 'leaf'
                                       , ARRAY[mk_confparam_constraint('1=1'), mk_confparam_constraint('$1=''correct value''')] :: t_confparam_constraint[]
-                                      , FALSE, 'par_d', NULL :: integer
-                                      , mk_cpvalue_l('incorrect value')
+                                      , FALSE, 'par_d', NULL :: integer, 'nonlnged_val'
+                                      , mk_cpvalue_l('incorrect value', NULL :: integer)
                                       )
                                   ]
                                 , FALSE
@@ -1156,26 +1171,26 @@ BEGIN
                                       mk_cparameter_uni(
                                         'b_a', 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , FALSE, 'sce_d', get_confentity_id('TC5_A_401')
+                                      , FALSE, 'sce_d', get_confentity_id('TC5_A_401'), NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_null()
                                       )
                                     , mk_cparameter_uni(
                                         'b_h', 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , FALSE, 'sce_d', get_confentity_id('TC5_H_401')
+                                      , FALSE, 'sce_d', get_confentity_id('TC5_H_401'), NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_null()
                                       )
                                     , mk_cparameter_uni(
                                         'b_1', 'leaf'
                                       , ARRAY[mk_confparam_constraint('1=1'), mk_confparam_constraint('$1=''correct value''')] :: t_confparam_constraint[]
-                                      , FALSE, 'no_d', NULL :: integer
+                                      , FALSE, 'no_d', NULL :: integer, 'nonlnged_val'
                                       , mk_cpvalue_null()
                                       )
                                     , mk_cparameter_uni(
                                         'b_2', 'leaf'
                                       , ARRAY[mk_confparam_constraint('1=1'), mk_confparam_constraint('$1=''correct value''')] :: t_confparam_constraint[]
-                                      , FALSE, 'par_d', NULL :: integer
-                                      , mk_cpvalue_l('incorrect value')
+                                      , FALSE, 'par_d', NULL :: integer, 'nonlnged_val'
+                                      , mk_cpvalue_l('incorrect value', NULL :: integer)
                                       )
                                   ]
                                 , FALSE
@@ -1186,20 +1201,20 @@ BEGIN
                                       mk_cparameter_uni(
                                         'c_a', 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , FALSE, 'sce_d', get_confentity_id('TC5_A_401')
+                                      , FALSE, 'sce_d', get_confentity_id('TC5_A_401'), NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_null()
                                       )
                                     , mk_cparameter_uni(
                                         'c_1', 'leaf'
                                       , ARRAY[mk_confparam_constraint('1=1'), mk_confparam_constraint('$1=''correct value''')] :: t_confparam_constraint[]
-                                      , FALSE, 'no_d', NULL :: integer
+                                      , FALSE, 'no_d', NULL :: integer, 'nonlnged_val'
                                       , mk_cpvalue_null()
                                       )
                                     , mk_cparameter_uni(
                                         'c_2', 'leaf'
                                       , ARRAY[mk_confparam_constraint('1=1'), mk_confparam_constraint('$1=''correct value''')] :: t_confparam_constraint[]
-                                      , FALSE, 'par_d', NULL :: integer
-                                      , mk_cpvalue_l('incorrect value')
+                                      , FALSE, 'par_d', NULL :: integer, 'nonlnged_val'
+                                      , mk_cpvalue_l('incorrect value', NULL :: integer)
                                       )
                                   ]
                                 , FALSE
@@ -1210,26 +1225,26 @@ BEGIN
                                       mk_cparameter_uni(
                                         'd_b', 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , FALSE, 'sce_d', get_confentity_id('TC5_B_401')
+                                      , FALSE, 'sce_d', get_confentity_id('TC5_B_401'), NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_null()
                                       )
                                     , mk_cparameter_uni(
                                         'd_c', 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , FALSE, 'sce_d', get_confentity_id('TC5_C_401')
+                                      , FALSE, 'sce_d', get_confentity_id('TC5_C_401'), NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_null()
                                       )
                                     , mk_cparameter_uni(
                                         'd_1', 'leaf'
                                       , ARRAY[mk_confparam_constraint('1=1'), mk_confparam_constraint('$1=''correct value''')] :: t_confparam_constraint[]
-                                      , FALSE, 'no_d', NULL :: integer
+                                      , FALSE, 'no_d', NULL :: integer, 'nonlnged_val'
                                       , mk_cpvalue_null()
                                       )
                                     , mk_cparameter_uni(
                                         'd_2', 'leaf'
                                       , ARRAY[mk_confparam_constraint('1=1'), mk_confparam_constraint('$1=''correct value''')] :: t_confparam_constraint[]
-                                      , FALSE, 'par_d', NULL :: integer
-                                      , mk_cpvalue_l('incorrect value')
+                                      , FALSE, 'par_d', NULL :: integer, 'nonlnged_val'
+                                      , mk_cpvalue_l('incorrect value', NULL :: integer)
                                       )
                                   ]
                                 , FALSE
@@ -1240,20 +1255,20 @@ BEGIN
                                       mk_cparameter_uni(
                                         'e_g', 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , FALSE, 'sce_d', get_confentity_id('TC5_G_401')
+                                      , FALSE, 'sce_d', get_confentity_id('TC5_G_401'), NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_null()
                                       )
                                     , mk_cparameter_uni(
                                         'e_1', 'leaf'
                                       , ARRAY[mk_confparam_constraint('1=1'), mk_confparam_constraint('$1=''correct value''')] :: t_confparam_constraint[]
-                                      , FALSE, 'no_d', NULL :: integer
+                                      , FALSE, 'no_d', NULL :: integer, 'nonlnged_val'
                                       , mk_cpvalue_null()
                                       )
                                     , mk_cparameter_uni(
                                         'e_2', 'leaf'
                                       , ARRAY[mk_confparam_constraint('1=1'), mk_confparam_constraint('$1=''correct value''')] :: t_confparam_constraint[]
-                                      , FALSE, 'par_d', NULL :: integer
-                                      , mk_cpvalue_l('incorrect value')
+                                      , FALSE, 'par_d', NULL :: integer, 'nonlnged_val'
+                                      , mk_cpvalue_l('incorrect value', NULL :: integer)
                                       )
                                   ]
                                 , FALSE
@@ -1264,20 +1279,20 @@ BEGIN
                                       mk_cparameter_uni(
                                         'f_g', 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , FALSE, 'sce_d', get_confentity_id('TC5_G_401')
+                                      , FALSE, 'sce_d', get_confentity_id('TC5_G_401'), NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_null()
                                       )
                                     , mk_cparameter_uni(
                                         'f_1', 'leaf'
                                       , ARRAY[mk_confparam_constraint('1=1'), mk_confparam_constraint('$1=''correct value''')] :: t_confparam_constraint[]
-                                      , FALSE, 'no_d', NULL :: integer
+                                      , FALSE, 'no_d', NULL :: integer, 'nonlnged_val'
                                       , mk_cpvalue_null()
                                       )
                                     , mk_cparameter_uni(
                                         'f_2', 'leaf'
                                       , ARRAY[mk_confparam_constraint('1=1'), mk_confparam_constraint('$1=''correct value''')] :: t_confparam_constraint[]
-                                      , FALSE, 'par_d', NULL :: integer
-                                      , mk_cpvalue_l('incorrect value')
+                                      , FALSE, 'par_d', NULL :: integer, 'nonlnged_val'
+                                      , mk_cpvalue_l('incorrect value', NULL :: integer)
                                       )
                                   ]
                                 , FALSE
@@ -1288,14 +1303,14 @@ BEGIN
                                       mk_cparameter_uni(
                                         'g_1', 'leaf'
                                       , ARRAY[mk_confparam_constraint('1=1'), mk_confparam_constraint('$1=''correct value''')] :: t_confparam_constraint[]
-                                      , FALSE, 'no_d', NULL :: integer
+                                      , FALSE, 'no_d', NULL :: integer, 'nonlnged_val'
                                       , mk_cpvalue_null()
                                       )
                                     , mk_cparameter_uni(
                                         'g_2', 'leaf'
                                       , ARRAY[mk_confparam_constraint('1=1'), mk_confparam_constraint('$1=''correct value''')] :: t_confparam_constraint[]
-                                      , FALSE, 'par_d', NULL :: integer
-                                      , mk_cpvalue_l('incorrect value')
+                                      , FALSE, 'par_d', NULL :: integer, 'nonlnged_val'
+                                      , mk_cpvalue_l('incorrect value', NULL :: integer)
                                       )
                                   ]
                                 , FALSE
@@ -1306,14 +1321,14 @@ BEGIN
                                       mk_cparameter_uni(
                                         'h_1', 'leaf'
                                       , ARRAY[mk_confparam_constraint('1=1'), mk_confparam_constraint('$1=''correct value''')] :: t_confparam_constraint[]
-                                      , FALSE, 'no_d', NULL :: integer
+                                      , FALSE, 'no_d', NULL :: integer, 'nonlnged_val'
                                       , mk_cpvalue_null()
                                       )
                                     , mk_cparameter_uni(
                                         'h_2', 'leaf'
                                       , ARRAY[mk_confparam_constraint('1=1'), mk_confparam_constraint('$1=''correct value''')] :: t_confparam_constraint[]
-                                      , FALSE, 'par_d', NULL :: integer
-                                      , mk_cpvalue_l('incorrect value')
+                                      , FALSE, 'par_d', NULL :: integer, 'nonlnged_val'
+                                      , mk_cpvalue_l('incorrect value', NULL :: integer)
                                       )
                                   ]
                                 , FALSE
@@ -1324,20 +1339,20 @@ BEGIN
                                       mk_cparameter_uni(
                                         'i_f', 'subconfig'
                                       , ARRAY[] :: t_confparam_constraint[]
-                                      , FALSE, 'sce_d', get_confentity_id('TC5_F_401')
+                                      , FALSE, 'sce_d', get_confentity_id('TC5_F_401'), NULL :: t_lnged_paramvalue_dflt_src
                                       , mk_cpvalue_null()
                                       )
                                     , mk_cparameter_uni(
                                         'i_1', 'leaf'
                                       , ARRAY[mk_confparam_constraint('1=1'), mk_confparam_constraint('$1=''correct value''')] :: t_confparam_constraint[]
-                                      , FALSE, 'no_d', NULL :: integer
+                                      , FALSE, 'no_d', NULL :: integer, 'nonlnged_val'
                                       , mk_cpvalue_null()
                                       )
                                     , mk_cparameter_uni(
                                         'i_2', 'leaf'
                                       , ARRAY[mk_confparam_constraint('1=1'), mk_confparam_constraint('$1=''correct value''')] :: t_confparam_constraint[]
-                                      , FALSE, 'par_d', NULL :: integer
-                                      , mk_cpvalue_l('incorrect value')
+                                      , FALSE, 'par_d', NULL :: integer, 'nonlnged_val'
+                                      , mk_cpvalue_l('incorrect value', NULL :: integer)
                                       )
                                   ]
                                 , FALSE
@@ -1348,74 +1363,83 @@ BEGIN
                                 make_configkey_bystr2('TC5_A_401', 'TC5_A_401_CFG_cor')
                               , ARRAY[ ROW( 'a_e', mk_cpvalue_s('TC5_E_401_CFG_incor', NULL :: varchar, 'no_lnk'))
                                      , ROW( 'a_f', mk_cpvalue_s('TC5_F_401_CFG_incor', NULL :: varchar, 'no_lnk'))
-                                     , ROW( 'a_1', mk_cpvalue_l('correct value'))
-                                     , ROW( 'a_2', mk_cpvalue_l('correct value'))
+                                     , ROW( 'a_1', mk_cpvalue_l('correct value', NULL :: integer))
+                                     , ROW( 'a_2', mk_cpvalue_l('correct value', NULL :: integer))
                                      ] :: t_paramvals__short[]
                               , 1
+                              , FALSE
                               )
                       , set_confparam_values_set(
                                 make_configkey_bystr2('TC5_B_401', 'TC5_B_401_CFG_cor')
                               , ARRAY[ ROW( 'b_a', mk_cpvalue_s('TC5_A_401_CFG_incor', NULL :: varchar, 'no_lnk'))
                                      , ROW( 'b_h', mk_cpvalue_s('TC5_H_401_CFG_incor', NULL :: varchar, 'no_lnk'))
-                                     , ROW( 'b_1', mk_cpvalue_l('correct value'))
-                                     , ROW( 'b_2', mk_cpvalue_l('correct value'))
+                                     , ROW( 'b_1', mk_cpvalue_l('correct value', NULL :: integer))
+                                     , ROW( 'b_2', mk_cpvalue_l('correct value', NULL :: integer))
                                      ] :: t_paramvals__short[]
                               , 1
+                              , FALSE
                               )
                       , set_confparam_values_set(
                                 make_configkey_bystr2('TC5_C_401', 'TC5_C_401_CFG_cor')
                               , ARRAY[ ROW( 'c_a', mk_cpvalue_s('TC5_A_401_CFG_incor', NULL :: varchar, 'no_lnk'))
-                                     , ROW( 'c_1', mk_cpvalue_l('correct value'))
-                                     , ROW( 'c_2', mk_cpvalue_l('correct value'))
+                                     , ROW( 'c_1', mk_cpvalue_l('correct value', NULL :: integer))
+                                     , ROW( 'c_2', mk_cpvalue_l('correct value', NULL :: integer))
                                      ] :: t_paramvals__short[]
                               , 1
+                              , FALSE
                               )
                       , set_confparam_values_set(
                                 make_configkey_bystr2('TC5_D_401', 'TC5_D_401_CFG_cor')
                               , ARRAY[ ROW( 'd_b', mk_cpvalue_s('TC5_B_401_CFG_incor', NULL :: varchar, 'no_lnk'))
                                      , ROW( 'd_c', mk_cpvalue_s('TC5_C_401_CFG_incor', NULL :: varchar, 'no_lnk'))
-                                     , ROW( 'd_1', mk_cpvalue_l('correct value'))
-                                     , ROW( 'd_2', mk_cpvalue_l('correct value'))
+                                     , ROW( 'd_1', mk_cpvalue_l('correct value', NULL :: integer))
+                                     , ROW( 'd_2', mk_cpvalue_l('correct value', NULL :: integer))
                                      ] :: t_paramvals__short[]
                               , 1
+                              , FALSE
                               )
                       , set_confparam_values_set(
                                 make_configkey_bystr2('TC5_E_401', 'TC5_E_401_CFG_cor')
                               , ARRAY[ ROW( 'e_g', mk_cpvalue_s('TC5_G_401_CFG_incor', NULL :: varchar, 'no_lnk'))
-                                     , ROW( 'e_1', mk_cpvalue_l('correct value'))
-                                     , ROW( 'e_2', mk_cpvalue_l('correct value'))
+                                     , ROW( 'e_1', mk_cpvalue_l('correct value', NULL :: integer))
+                                     , ROW( 'e_2', mk_cpvalue_l('correct value', NULL :: integer))
                                      ] :: t_paramvals__short[]
                               , 1
+                              , FALSE
                               )
                       , set_confparam_values_set(
                                 make_configkey_bystr2('TC5_F_401', 'TC5_F_401_CFG_cor')
                               , ARRAY[ ROW( 'f_g', mk_cpvalue_s('TC5_G_401_CFG_incor', NULL :: varchar, 'no_lnk'))
-                                     , ROW( 'f_1', mk_cpvalue_l('correct value'))
-                                     , ROW( 'f_2', mk_cpvalue_l('correct value'))
+                                     , ROW( 'f_1', mk_cpvalue_l('correct value', NULL :: integer))
+                                     , ROW( 'f_2', mk_cpvalue_l('correct value', NULL :: integer))
                                      ] :: t_paramvals__short[]
                               , 1
+                              , FALSE
                               )
                       , set_confparam_values_set(
                                 make_configkey_bystr2('TC5_G_401', 'TC5_G_401_CFG_cor')
-                              , ARRAY[ ROW( 'g_1', mk_cpvalue_l('correct value'))
-                                     , ROW( 'g_2', mk_cpvalue_l('correct value'))
+                              , ARRAY[ ROW( 'g_1', mk_cpvalue_l('correct value', NULL :: integer))
+                                     , ROW( 'g_2', mk_cpvalue_l('correct value', NULL :: integer))
                                      ] :: t_paramvals__short[]
                               , 1
+                              , FALSE
                               )
                       , set_confparam_values_set(
                                 make_configkey_bystr2('TC5_H_401', 'TC5_H_401_CFG_cor')
-                              , ARRAY[ ROW( 'h_1', mk_cpvalue_l('correct value'))
-                                     , ROW( 'h_2', mk_cpvalue_l('correct value'))
+                              , ARRAY[ ROW( 'h_1', mk_cpvalue_l('correct value', NULL :: integer))
+                                     , ROW( 'h_2', mk_cpvalue_l('correct value', NULL :: integer))
                                      ] :: t_paramvals__short[]
                               , 1
+                              , FALSE
                               )
                       , set_confparam_values_set(
                                 make_configkey_bystr2('TC5_I_401', 'TC5_I_401_CFG_cor')
                               , ARRAY[ ROW( 'i_f', mk_cpvalue_s('TC5_F_401_CFG_incor', NULL :: varchar, 'no_lnk'))
-                                     , ROW( 'i_1', mk_cpvalue_l('correct value'))
-                                     , ROW( 'i_2', mk_cpvalue_l('correct value'))
+                                     , ROW( 'i_1', mk_cpvalue_l('correct value', NULL :: integer))
+                                     , ROW( 'i_2', mk_cpvalue_l('correct value', NULL :: integer))
                                      ] :: t_paramvals__short[]
                               , 1
+                              , FALSE
                               )
                       ;
                 UPDATE configurations AS c SET completeness_as_regulator = 'SET INCOMPLETE'
@@ -1536,15 +1560,17 @@ $$;
 
 SELECT set_confparam_values_set(
                 make_configkey_bystr2('Configuration management system setup', 'CMSS config #1')
-              , ARRAY[ ROW( 'completeness check routines', mk_cpvalue_l('DISABLED'))
+              , ARRAY[ ROW( 'completeness check routines', mk_cpvalue_l('DISABLED', NULL :: integer))
                      ] :: t_paramvals__short[]
               , 1
+              , FALSE
               );
 SELECT set_confparam_values_set(
                 make_configkey_bystr2('Configuration management system setup', 'CMSS config #1')
-              , ARRAY[ ROW( 'notice config items creation/deletion', mk_cpvalue_l('DISABLED'))
+              , ARRAY[ ROW( 'notice config items creation/deletion', mk_cpvalue_l('DISABLED', NULL :: integer))
                      ] :: t_paramvals__short[]
               , 1
+              , FALSE
               );
 
 
@@ -1554,16 +1580,18 @@ SELECT pkg_<<$pkg.name_p$>>_<<$pkg.ver_p$>>__create_all_testcases();
 
 SELECT set_confparam_values_set(
                 make_configkey_bystr2('Configuration management system setup', 'CMSS config #1')
-              , ARRAY[ ROW( 'completeness check routines', mk_cpvalue_l('ENABLED'))
+              , ARRAY[ ROW( 'completeness check routines', mk_cpvalue_l('ENABLED', NULL :: integer))
                      ] :: t_paramvals__short[]
               , 1
+              , FALSE
               );
 
 SELECT set_confparam_values_set(
                 make_configkey_bystr2('Configuration management system setup', 'CMSS config #1')
-              , ARRAY[ ROW( 'notice config items creation/deletion', mk_cpvalue_l('DISABLED'))
+              , ARRAY[ ROW( 'notice config items creation/deletion', mk_cpvalue_l('DISABLED', NULL :: integer))
                      ] :: t_paramvals__short[]
               , 1
+              , FALSE
               );
 
 ------------------------------------------------------------------------------

@@ -27,8 +27,8 @@
 
 
 -- Reference functions:
-SELECT mk_cpvalue_l('asd');
-SELECT mk_cpvalue_l(NULL :: varchar);
+SELECT mk_cpvalue_l('asd', NULL :: integer);
+SELECT mk_cpvalue_l(NULL :: varchar, NULL :: integer);
 
 SELECT mk_cpvalue_s('asd', 'asd', 'no_lnk');
 SELECT mk_cpvalue_s(NULL :: varchar, 'asd', 'no_lnk');
@@ -36,32 +36,32 @@ SELECT mk_cpvalue_s(NULL :: varchar, NULL :: varchar, 'alw_onl_lnk');
 SELECT mk_cpvalue_s('asd', 'asd', NULL :: t_subconfig_value_linking_read_rule);
 
 SELECT isconsistent_cpvalue(mk_cpvalue_null());
-SELECT isconsistent_cpvalue(mk_cpvalue_l('asd'));
-SELECT isconsistent_cpvalue(mk_cpvalue_l(NULL :: varchar));
+SELECT isconsistent_cpvalue(mk_cpvalue_l('asd', NULL :: integer));
+SELECT isconsistent_cpvalue(mk_cpvalue_l(NULL :: varchar, NULL :: integer));
 SELECT isconsistent_cpvalue(mk_cpvalue_s('asd', 'asd', 'no_lnk'));
 SELECT isconsistent_cpvalue(mk_cpvalue_s(NULL :: varchar, 'asd', 'no_lnk'));
 SELECT isconsistent_cpvalue(mk_cpvalue_s(NULL :: varchar, NULL :: varchar, 'alw_onl_lnk'));
 SELECT isconsistent_cpvalue(mk_cpvalue_s('asd', 'asd', NULL :: t_subconfig_value_linking_read_rule));
 
 SELECT isdefined_cpvalue(mk_cpvalue_null());
-SELECT isdefined_cpvalue(mk_cpvalue_l('asd'));
-SELECT isdefined_cpvalue(mk_cpvalue_l(NULL :: varchar));
+SELECT isdefined_cpvalue(mk_cpvalue_l('asd', NULL :: integer));
+SELECT isdefined_cpvalue(mk_cpvalue_l(NULL :: varchar, NULL :: integer));
 SELECT isdefined_cpvalue(mk_cpvalue_s('asd', 'asd', 'no_lnk'));
 SELECT isdefined_cpvalue(mk_cpvalue_s(NULL :: varchar, 'asd', 'no_lnk'));
 SELECT isdefined_cpvalue(mk_cpvalue_s(NULL :: varchar, NULL :: varchar, 'alw_onl_lnk'));
 SELECT isdefined_cpvalue(mk_cpvalue_s('asd', 'asd', NULL :: t_subconfig_value_linking_read_rule));
 
 SELECT isnull_cpvalue(mk_cpvalue_null(), TRUE);
-SELECT isnull_cpvalue(mk_cpvalue_l('asd'), TRUE);
-SELECT isnull_cpvalue(mk_cpvalue_l(NULL :: varchar), TRUE);
+SELECT isnull_cpvalue(mk_cpvalue_l('asd', NULL :: integer), TRUE);
+SELECT isnull_cpvalue(mk_cpvalue_l(NULL :: varchar, NULL :: integer), TRUE);
 SELECT isnull_cpvalue(mk_cpvalue_s('asd', 'asd', 'no_lnk'), TRUE);
 SELECT isnull_cpvalue(mk_cpvalue_s(NULL :: varchar, 'asd', 'no_lnk'), TRUE);
 SELECT isnull_cpvalue(mk_cpvalue_s(NULL :: varchar, NULL :: varchar, 'alw_onl_lnk'), TRUE);
 SELECT isnull_cpvalue(mk_cpvalue_s('asd', 'asd', NULL :: t_subconfig_value_linking_read_rule), TRUE);
 
 SELECT isnull_cpvalue(mk_cpvalue_null(), FALSE);
-SELECT isnull_cpvalue(mk_cpvalue_l('asd'), FALSE);
-SELECT isnull_cpvalue(mk_cpvalue_l(NULL :: varchar), FALSE);
+SELECT isnull_cpvalue(mk_cpvalue_l('asd', NULL :: integer), FALSE);
+SELECT isnull_cpvalue(mk_cpvalue_l(NULL :: varchar, NULL :: integer), FALSE);
 SELECT isnull_cpvalue(mk_cpvalue_s('asd', 'asd', 'no_lnk'), FALSE);
 SELECT isnull_cpvalue(mk_cpvalue_s(NULL :: varchar, 'asd', 'no_lnk'), FALSE);
 SELECT isnull_cpvalue(mk_cpvalue_s(NULL :: varchar, NULL :: varchar, 'alw_onl_lnk'), FALSE);
@@ -74,7 +74,8 @@ SELECT mk_cparameter_uni(
         , TRUE
         , 'par_d'
         , 123
-        , mk_cpvalue_l('asd')
+        , 'nonlnged_val'
+        , mk_cpvalue_l('asd', NULL :: integer)
         );
 
 SELECT show_confentityparamkey(make_confentityparamkey(make_confentitykey_bystr('Dummy_1_CE'), 'dummy_1_param_1', FALSE));

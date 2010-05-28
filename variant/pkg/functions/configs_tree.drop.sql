@@ -35,8 +35,8 @@ DROP FUNCTION IF EXISTS show_cfgtreerow_path(par_configs_tree t_configs_tree_rel
 
 -- Analytic functions:
 DROP FUNCTION IF EXISTS cfg_idx_in_list(par_configkey t_config_key, par_config_list t_config_key[]);
-DROP FUNCTION IF EXISTS cfg_tree_2_cfgs(par_cfg_tree t_configs_tree_rel[]);
-DROP FUNCTION IF EXISTS analyze_cfgs_tree(par_config_tree t_configs_tree_rel[], par_exclude_cfg t_config_key, par_asc_depth boolean);
+DROP FUNCTION IF EXISTS cfg_tree_2_cfgs(par_cfg_tree t_configs_tree_rel[], par_val_lng_code_id integer);
+DROP FUNCTION IF EXISTS analyze_cfgs_tree(par_config_tree t_configs_tree_rel[], par_exclude_cfg t_config_key, par_asc_depth boolean, par_val_lng_id integer);
 
 -- Lookup functions:
 DROP FUNCTION IF EXISTS super_cfgs_of(par_config_key t_config_key, par_value_source_types t_cfg_tree_rel_type[]);

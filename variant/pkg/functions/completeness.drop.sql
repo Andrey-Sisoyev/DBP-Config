@@ -32,24 +32,27 @@ DROP FUNCTION IF EXISTS cc_cnstr_arr_check(par_cc_row t_completeness_check_row);
 DROP FUNCTION IF EXISTS seek_paramvalues_cc_by_subcfg_ctr(par_config_tree_row t_configs_tree_rel, par_pvcc_set t_completeness_check_row[]);
 DROP FUNCTION IF EXISTS cc_isit(par_cc_rows t_completeness_check_row[]);
 DROP FUNCTION IF EXISTS check_paramvalues_cc(
-          par_cc_rows t_completeness_check_row[]
-        , par_perform_cnstr_checks integer
+          par_cc_rows                 t_completeness_check_row[]
+        , par_perform_cnstr_checks    integer
         , par_thorough_report_warning t_thorough_report_warning_mode
+        , par_val_lng_id              integer
         );
 
 
 -- Lookup functions:
-DROP FUNCTION IF EXISTS cc_subcfg_compl_check(
-                par_cc_row                  t_completeness_check_row
-              , par_thorough_mode           integer
-              , par_thorough_report_warning t_thorough_report_warning_mode
-              );
+DROP FUNCTION IF EXISTS check_paramvalues_cc(
+          par_cc_rows                 t_completeness_check_row[]
+        , par_perform_cnstr_checks    integer
+        , par_thorough_report_warning t_thorough_report_warning_mode
+        , par_val_lng_id              integer
+        );
 DROP FUNCTION IF EXISTS get_paramvalues_cc(par_config_key t_config_key);
 
 
 -- Administration functions:
 DROP FUNCTION IF EXISTS config_completeness(
                   par_config_tree_row         t_configs_tree_rel
+                , par_values_lng_id           integer
                 , par_thorough_check          integer
                 , par_thorough_report_warning t_thorough_report_warning_mode
                 , par_update_mode             integer

@@ -117,13 +117,13 @@ SELECT * FROM unnest(get_paramvalues_cc(make_configkey_bystr2('TC5_A_401', 'TC5_
 -------------
 
 SELECT y.b AS thorough_mode
-     , cc_subcfg_compl_check(ROW(x.*) :: t_completeness_check_row, y.b, 'ALWAYS')
+     , cc_subcfg_compl_check(ROW(x.*) :: t_completeness_check_row, y.b, 'ALWAYS', NULL :: integer)
 FROM unnest(get_paramvalues_cc(make_configkey_bystr2('TC5_A_401', 'TC5_A_401_CFG_cor'))) AS x
    , unnest(ARRAY[0,1,2,3] :: integer[]) y(b)
 ORDER BY thorough_mode;
 
 SELECT y.b AS thorough_mode
-     , cc_subcfg_compl_check(ROW(x.*) :: t_completeness_check_row, y.b, 'ALWAYS')
+     , cc_subcfg_compl_check(ROW(x.*) :: t_completeness_check_row, y.b, 'ALWAYS', NULL :: integer)
 FROM unnest(get_paramvalues_cc(make_configkey_bystr2('TC5_A_401', 'TC5_A_401_CFG_incor'))) AS x
    , unnest(ARRAY[0,1,2,3] :: integer[]) y(b)
 ORDER BY thorough_mode;
@@ -192,6 +192,7 @@ SELECT set_confparam_values_set(
                      , ROW( 'a_e', mk_cpvalue_s('TC5_E_401_CFG_cor', NULL :: varchar, 'no_lnk'))
                      ] :: t_paramvals__short[]
               , 1
+              , FALSE
               );
 
 \echo NOTICE >>>>>> Still won't succeed - subSUBconfigs are incorrect
@@ -204,12 +205,14 @@ SELECT set_confparam_values_set(
               , ARRAY[ ROW( 'e_g', mk_cpvalue_s('TC5_G_401_CFG_cor', NULL :: varchar, 'no_lnk'))
                      ] :: t_paramvals__short[]
               , 1
+              , FALSE
               )
      , set_confparam_values_set(
                 make_configkey_bystr2('TC5_F_401', 'TC5_F_401_CFG_cor')
               , ARRAY[ ROW( 'f_g', mk_cpvalue_s('TC5_G_401_CFG_cor', NULL :: varchar, 'no_lnk'))
                      ] :: t_paramvals__short[]
               , 1
+              , FALSE
               );
 
 \echo NOTICE >>>>>> Current and subs are all correct - must be complete
@@ -233,12 +236,14 @@ SELECT set_confparam_values_set(
               , ARRAY[ ROW( 'b_a', mk_cpvalue_s('TC5_A_401_CFG_cor', NULL :: varchar, 'no_lnk'))
                      ] :: t_paramvals__short[]
               , 1
+              , FALSE
               )
      , set_confparam_values_set(
                 make_configkey_bystr2('TC5_C_401', 'TC5_C_401_CFG_cor')
               , ARRAY[ ROW( 'c_a', mk_cpvalue_s('TC5_A_401_CFG_cor', NULL :: varchar, 'no_lnk'))
                      ] :: t_paramvals__short[]
               , 1
+              , FALSE
               )
      , set_confparam_values_set(
                 make_configkey_bystr2('TC5_D_401', 'TC5_D_401_CFG_cor')
@@ -246,6 +251,7 @@ SELECT set_confparam_values_set(
                      , ROW( 'd_c', mk_cpvalue_s('TC5_C_401_CFG_cor', NULL :: varchar, 'no_lnk'))
                      ] :: t_paramvals__short[]
               , 1
+              , FALSE
               );
 
 \echo NOTICE >>>>>> C must be complete, B still refers incorrect H
@@ -269,12 +275,14 @@ SELECT set_confparam_values_set(
               , ARRAY[ ROW( 'b_h', mk_cpvalue_s('TC5_H_401_CFG_cor', NULL :: varchar, 'no_lnk'))
                      ] :: t_paramvals__short[]
               , 1
+              , FALSE
               )
      , set_confparam_values_set(
                 make_configkey_bystr2('TC5_I_401', 'TC5_I_401_CFG_cor')
               , ARRAY[ ROW( 'i_f', mk_cpvalue_s('TC5_F_401_CFG_cor', NULL :: varchar, 'no_lnk'))
                      ] :: t_paramvals__short[]
               , 1
+              , FALSE
               )
      ;
 
@@ -376,9 +384,10 @@ SELECT read_completeness(make_configkey_bystr2('TC5_A_401', 'TC5_A_401_CFG_cor')
 
 SELECT set_confparam_values_set(
                 make_configkey_bystr2('TC5_H_401', 'TC5_H_401_CFG_cor')
-              , ARRAY[ ROW( 'h_1', mk_cpvalue_l('incorrect value'))
+              , ARRAY[ ROW( 'h_1', mk_cpvalue_l('incorrect value', NULL :: integer))
                      ] :: t_paramvals__short[]
               , 1
+              , FALSE
               );
 
 SELECT read_completeness(make_configkey_bystr2('TC5_A_401', 'TC5_A_401_CFG_cor')) AS a
@@ -400,9 +409,10 @@ WHERE (confentity_code_id = get_confentity_id('TC5_D_401') AND configuration_id 
 \echo NOTICE >>>>>> H, B and D must become incomplete automatically.
 SELECT set_confparam_values_set(
                 make_configkey_bystr2('TC5_H_401', 'TC5_H_401_CFG_cor')
-              , ARRAY[ ROW( 'h_1', mk_cpvalue_l('incorrect value'))
+              , ARRAY[ ROW( 'h_1', mk_cpvalue_l('incorrect value', NULL :: integer))
                      ] :: t_paramvals__short[]
               , 1
+              , FALSE
               );
 
 SELECT read_completeness(make_configkey_bystr2('TC5_A_401', 'TC5_A_401_CFG_cor')) AS a
@@ -423,17 +433,19 @@ WHERE (confentity_code_id = get_confentity_id('TC5_D_401') AND configuration_id 
 
 SELECT set_confparam_values_set(
                 make_configkey_bystr2('Configuration management system setup', 'CMSS config #1')
-              , ARRAY[ ROW( 'when to check completeness', mk_cpvalue_l('ALWAYS'))
+              , ARRAY[ ROW( 'when to check completeness', mk_cpvalue_l('ALWAYS', NULL :: integer))
                      ] :: t_paramvals__short[]
               , 1
+              , FALSE
               );
 
 \echo NOTICE >>>>>> Thist must fail.
 SELECT set_confparam_values_set(
                 make_configkey_bystr2('TC5_H_401', 'TC5_H_401_CFG_cor')
-              , ARRAY[ ROW( 'h_1', mk_cpvalue_l('incorrect value 2'))
+              , ARRAY[ ROW( 'h_1', mk_cpvalue_l('incorrect value 2', NULL :: integer))
                      ] :: t_paramvals__short[]
               , 1
+              , FALSE
               );
 
 SELECT read_completeness(make_configkey_bystr2('TC5_A_401', 'TC5_A_401_CFG_cor')) AS a
@@ -452,9 +464,10 @@ SELECT read_completeness(make_configkey_bystr2('TC5_A_401', 'TC5_A_401_CFG_cor')
 \echo NOTICE >>>>>> H, B and D must become complete again automatically.
 SELECT set_confparam_values_set(
                 make_configkey_bystr2('TC5_H_401', 'TC5_H_401_CFG_cor')
-              , ARRAY[ ROW( 'h_1', mk_cpvalue_l('correct value'))
+              , ARRAY[ ROW( 'h_1', mk_cpvalue_l('correct value', NULL :: integer))
                      ] :: t_paramvals__short[]
               , 1
+              , FALSE
               );
 
 SELECT read_completeness(make_configkey_bystr2('TC5_A_401', 'TC5_A_401_CFG_cor')) AS a
@@ -470,7 +483,8 @@ SELECT read_completeness(make_configkey_bystr2('TC5_A_401', 'TC5_A_401_CFG_cor')
 
 SELECT set_confparam_values_set(
                 make_configkey_bystr2('Configuration management system setup', 'CMSS config #1')
-              , ARRAY[ ROW( 'when to check completeness', mk_cpvalue_l('FOR COMPLETE ONLY'))
+              , ARRAY[ ROW( 'when to check completeness', mk_cpvalue_l('FOR COMPLETE ONLY', NULL :: integer))
                      ] :: t_paramvals__short[]
               , 1
+              , FALSE
               );

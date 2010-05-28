@@ -139,7 +139,8 @@ BEGIN
                         EXECUTE q
                         INTO chk
                         USING (r.param_value).final_value
-                            , r.config_id;
+                            , r.config_id
+                            , ((r.param_value).value).lng_code_id;
                         ok:= ok AND (chk IS NOT DISTINCT FROM TRUE);
                 END LOOP;
 
@@ -166,21 +167,22 @@ CREATE OR REPLACE FUNCTION cc_subcfg_compl_check(
                 par_cc_row                  t_completeness_check_row
               , par_thorough_mode           integer
               , par_thorough_report_warning t_thorough_report_warning_mode
+              , par_val_lng_id              integer
               ) RETURNS t_completeness_check_row
 SET search_path = sch_<<$app_name$>> -- , comn_funs, public
 LANGUAGE plpgsql
 AS $$
 DECLARE
-        r              sch_<<$app_name$>>.t_completeness_check_row;
-        ck             sch_<<$app_name$>>.t_config_key;
-        chk            sch_<<$app_name$>>.t_config_completeness_check_result;
+        r   sch_<<$app_name$>>.t_completeness_check_row;
+        ck  sch_<<$app_name$>>.t_config_key;
+        chk sch_<<$app_name$>>.t_config_completeness_check_result;
 BEGIN
         r:= par_cc_row;
 
         IF ((par_cc_row.param_value).param_base).type = 'leaf' THEN
                 r.cc_subconfig_is_complete:= 'le_V';
         ELSE
-                ck:= make_configkey_bystr(r.confentity_code_id, r.config_id);
+                ck:= make_configkey(make_confentitykey_byid(r.confentity_code_id), r.config_id, FALSE, make_codekeyl_byid(par_val_lng_id));
                 r.cc_subconfig_is_complete:= config_is_complete(ck, par_thorough_mode, par_thorough_report_warning);
         END IF;
 
@@ -192,6 +194,7 @@ COMMENT ON FUNCTION cc_subcfg_compl_check(
                 par_cc_row                  t_completeness_check_row
               , par_thorough_mode           integer
               , par_thorough_report_warning t_thorough_report_warning_mode
+              , par_val_lng_id              integer
               ) IS
 'This function checks, if value is of type "subconfig", then if the subconfig is complete.
 For value of type "leaf" check is always successful.
@@ -219,7 +222,7 @@ BEGIN
                               , NULL :: t_config_completeness_check_result
                               )
                 FROM unnest(get_paramvalues(TRUE, g)) AS cps -- t_cparameter_value_uni
-                ORDER BY (cps.param_base).type, (cps.param_base).param_id
+                ORDER BY (cps.param_base).type, (cps.param_base).param_id, (cps.value).lng_code_id NULLS FIRST
         );
 
         RETURN r;
@@ -255,9 +258,10 @@ The function is a result of bad style coding (but it does what it is required to
 -------------------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION check_paramvalues_cc(
-          par_cc_rows t_completeness_check_row[]
-        , par_perform_cnstr_checks integer
+          par_cc_rows                 t_completeness_check_row[]
+        , par_perform_cnstr_checks    integer
         , par_thorough_report_warning t_thorough_report_warning_mode
+        , par_val_lng_id              integer
         ) RETURNS t_completeness_check_row[]
 SET search_path = sch_<<$app_name$>> -- , comn_funs, public
 LANGUAGE plpgsql
@@ -297,7 +301,7 @@ BEGIN
                 END IF;
 
                 IF mode3 > 0 THEN
-                        r:= cc_subcfg_compl_check(r, mode3 - 1, par_thorough_report_warning);
+                        r:= cc_subcfg_compl_check(r, mode3 - 1, par_thorough_report_warning, par_val_lng_id);
                 END IF;
 
                 ar[i]:= r;
@@ -308,10 +312,11 @@ END;
 $$;
 
 COMMENT ON FUNCTION check_paramvalues_cc(
-                          par_cc_rows t_completeness_check_row[]
-                        , par_perform_cnstr_checks integer
-                        , par_thorough_report_warning t_thorough_report_warning_mode
-                        ) IS
+          par_cc_rows                 t_completeness_check_row[]
+        , par_perform_cnstr_checks    integer
+        , par_thorough_report_warning t_thorough_report_warning_mode
+        , par_val_lng_id              integer
+        ) IS
 'Parameter "par_perform_cnstr_checks" may have values:
 0xx - no check #1
 1xx - perform only not null checks (for confparameters, that has "allow_null_final_value"=FALSE)
@@ -474,6 +479,7 @@ COMMENT ON FUNCTION form_cc_report(par_cfgkey t_config_key, par_cc_rows t_comple
 
 CREATE OR REPLACE FUNCTION config_completeness(
                   par_config_tree_row         t_configs_tree_rel
+                , par_values_lng_id           integer
                 , par_thorough_check          integer
                 , par_thorough_report_warning t_thorough_report_warning_mode
                 , par_update_mode             integer
@@ -505,6 +511,7 @@ DECLARE
         i integer;
         j integer;
         l integer;
+        vlng_id integer;
 BEGIN
         umode1:=     par_update_mode / 100;
         umode2:= mod(par_update_mode , 100) / 10;
@@ -544,18 +551,31 @@ BEGIN
                 RETURN r;
         END IF;
 
-        cur_ck:= make_configkey_bystr(
-                          par_config_tree_row.sub_ce_id
+        vlng_id:= par_values_lng_id; -- excessive redundancy
+        cur_ck:= make_configkey(
+                          make_confentitykey_byid(par_config_tree_row.sub_ce_id)
                         , par_config_tree_row.sub_cfg_id
+                        , FALSE
+                        , make_codekeyl_byid(vlng_id)
         );
         cur_ct_row:= par_config_tree_row;
         cur_ct_row.super_ce_id := NULL :: integer;
         cur_ct_row.super_cfg_id:= NULL :: varchar;
-        SELECT c.complete_isit
-        INTO old_cpl
-        FROM configurations AS c
-        WHERE c.configuration_id   = cur_ct_row.sub_cfg_id
-          AND c.confentity_code_id = cur_ct_row.sub_ce_id;
+        CASE vlng_id IS NULL
+            WHEN TRUE THEN
+                SELECT c.complete_isit
+                INTO old_cpl
+                FROM configurations AS c
+                WHERE c.configuration_id   = cur_ct_row.sub_cfg_id
+                  AND c.confentity_code_id = cur_ct_row.sub_ce_id;
+            ELSE
+                SELECT c.complete_isit
+                INTO old_cpl
+                FROM configurations_bylngs AS c
+                WHERE c.configuration_id   = cur_ct_row.sub_cfg_id
+                  AND c.confentity_code_id = cur_ct_row.sub_ce_id
+                  AND c.values_lng_code_id = vlng_id;
+        END CASE;
 
         GET DIAGNOSTICS rows_cnt = ROW_COUNT;
 
@@ -595,12 +615,15 @@ BEGIN
                 sub_r:= NULL :: t_config_completeness_check_result;
                 WHILE (i < l) LOOP
                         i:= i + 1;
-                        sub_r:= config_completeness(sub_cfgs[i], sub_th_chk_mode, par_thorough_report_warning, umode3 * 11); -- if umode3 = 1, then update current subconfig and all it's subs, else if umode3 = 0, update nothing
+                        sub_r:= config_completeness(sub_cfgs[i], vlng_id, sub_th_chk_mode, par_thorough_report_warning, umode3 * 11);
+                        -- if umode3 = 1, then update current subconfig and all it's subs, else if umode3 = 0, update nothing
 
-                        sub_ck:= make_configkey_bystr(
-                                          (sub_cfgs[i]).sub_ce_id
+                        sub_ck:= make_configkey(
+                                          make_confentitykey_byid((sub_cfgs[i]).sub_ce_id)
                                         , (sub_cfgs[i]).sub_cfg_id
-                        );
+                                        , FALSE
+                                        , make_codekeyl_byid(vlng_id)
+                                        );
                         j:= seek_paramvalues_cc_by_subcfg_ctr(sub_cfgs[i], ps);
                         p:= ps[j];
                         p.cc_subconfig_is_complete:= sub_r;
@@ -631,11 +654,21 @@ BEGIN
 
                                 -- bad style
                                 IF umode2 = 1 THEN
-                                        UPDATE configurations
-                                        SET complete_isit = r
-                                        WHERE complete_isit <> r
-                                          AND configuration_id   = cur_ct_row.sub_cfg_id
-                                          AND confentity_code_id = cur_ct_row.sub_ce_id;
+                                    CASE vlng_id IS NULL
+                                        WHEN TRUE THEN
+                                            UPDATE configurations
+                                            SET complete_isit = r
+                                            WHERE complete_isit <> r
+                                              AND configuration_id   = cur_ct_row.sub_cfg_id
+                                              AND confentity_code_id = cur_ct_row.sub_ce_id;
+                                        ELSE
+                                            UPDATE configurations_bylngs
+                                            SET complete_isit = r
+                                            WHERE complete_isit <> r
+                                              AND configuration_id   = cur_ct_row.sub_cfg_id
+                                              AND confentity_code_id = cur_ct_row.sub_ce_id
+                                              AND values_lng_code_id = vlng_id;
+                                    END CASE;
                                 END IF;
 
                                 RETURN r;
@@ -648,6 +681,7 @@ BEGIN
                                 ps
                               , 110   -- not null and user-defined constraints checks; don't check subconfigs
                               , par_thorough_report_warning
+                              , vlng_id
                         );
 
                         complete:= cc_isit(ps);
@@ -684,21 +718,37 @@ BEGIN
         END IF;
 
         IF umode2 = 1 THEN
-                cpl_li_x_isit:= r = 'li_chk_X';
-                cpl_li_v_isit:= r = 'li_chk_V';
-
-                UPDATE configurations
-                SET complete_isit = r
-                WHERE complete_isit <> r
-                  AND CASE cpl_li_x_isit
-                          WHEN TRUE THEN complete_isit <> 'th_chk_X'
-                          ELSE CASE cpl_li_v_isit
-                                   WHEN TRUE THEN complete_isit <> 'th_chk_V'
-                                   ELSE TRUE
-                               END
-                      END
-                  AND configuration_id   = cur_ct_row.sub_cfg_id
-                  AND confentity_code_id = cur_ct_row.sub_ce_id;
+            cpl_li_x_isit:= r = 'li_chk_X';
+            cpl_li_v_isit:= r = 'li_chk_V';
+            CASE vlng_id IS NULL
+                WHEN TRUE THEN
+                        UPDATE configurations
+                        SET complete_isit = r
+                        WHERE complete_isit <> r
+                          AND CASE cpl_li_x_isit
+                                  WHEN TRUE THEN complete_isit <> 'th_chk_X'
+                                  ELSE CASE cpl_li_v_isit
+                                           WHEN TRUE THEN complete_isit <> 'th_chk_V'
+                                           ELSE TRUE
+                                       END
+                              END
+                          AND configuration_id   = cur_ct_row.sub_cfg_id
+                          AND confentity_code_id = cur_ct_row.sub_ce_id;
+                ELSE
+                        UPDATE configurations_bylngs
+                        SET complete_isit = r
+                        WHERE complete_isit <> r
+                          AND CASE cpl_li_x_isit
+                                  WHEN TRUE THEN complete_isit <> 'th_chk_X'
+                                  ELSE CASE cpl_li_v_isit
+                                           WHEN TRUE THEN complete_isit <> 'th_chk_V'
+                                           ELSE TRUE
+                                       END
+                              END
+                          AND configuration_id   = cur_ct_row.sub_cfg_id
+                          AND confentity_code_id = cur_ct_row.sub_ce_id
+                          AND values_lng_code_id = vlng_id;
+            END CASE;
         END IF;
 
         IF umode1 = 1 AND complete THEN
@@ -715,6 +765,7 @@ BEGIN
                         g.super_ce_id := NULL :: integer;
                         PERFORM config_completeness(
                                   g
+                                , vlng_id
                                 , 1
                                 , par_thorough_report_warning
                                 , 110
@@ -728,6 +779,7 @@ $$;
 
 COMMENT ON FUNCTION config_completeness(
                   par_config_tree_row         t_configs_tree_rel
+                , par_values_lng_id           integer
                 , par_thorough_check          integer
                 , par_thorough_report_warning t_thorough_report_warning_mode
                 , par_update_mode             integer
@@ -780,6 +832,7 @@ AS $$
                       , NULL :: t_config_completeness_check_result
                       , NULL :: t_config_completeness_check_result
                       )
+                , CASE codekeyl_type(x.config_lng) WHEN 'undef' THEN NULL :: integer ELSE ((x.config_lng).code_key).code_id END
                 , $2
                 , $3
                 , $4
@@ -823,6 +876,7 @@ AS $$
                       , NULL :: t_config_completeness_check_result
                       , NULL :: t_config_completeness_check_result
                       )
+                , CASE codekeyl_type(x.config_lng) WHEN 'undef' THEN NULL :: integer ELSE ((x.config_lng).code_key).code_id END
                 , $2
                 , $3
                 , 0
@@ -904,10 +958,11 @@ GRANT EXECUTE ON FUNCTION cc_cnstr_arr_check(par_cc_row t_completeness_check_row
 GRANT EXECUTE ON FUNCTION seek_paramvalues_cc_by_subcfg_ctr(par_config_tree_row t_configs_tree_rel, par_pvcc_set t_completeness_check_row[])TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION cc_isit(par_cc_rows t_completeness_check_row[])TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION check_paramvalues_cc(
-          par_cc_rows t_completeness_check_row[]
-        , par_perform_cnstr_checks integer
+          par_cc_rows                 t_completeness_check_row[]
+        , par_perform_cnstr_checks    integer
         , par_thorough_report_warning t_thorough_report_warning_mode
-        )TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+        , par_val_lng_id              integer
+        ) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
 
 -- Lookup functions:
@@ -915,17 +970,19 @@ GRANT EXECUTE ON FUNCTION cc_subcfg_compl_check(
                 par_cc_row                  t_completeness_check_row
               , par_thorough_mode           integer
               , par_thorough_report_warning t_thorough_report_warning_mode
-              )TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+              , par_val_lng_id              integer
+              ) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION get_paramvalues_cc(par_config_key t_config_key)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
 
 -- Administration functions:
 GRANT EXECUTE ON FUNCTION config_completeness(
                   par_config_tree_row         t_configs_tree_rel
+                , par_values_lng_id           integer
                 , par_thorough_check          integer
                 , par_thorough_report_warning t_thorough_report_warning_mode
                 , par_update_mode             integer
-                ) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
+                )  TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
 GRANT EXECUTE ON FUNCTION config_completeness(
                   par_config_key              t_config_key
                 , par_thorough_check          integer

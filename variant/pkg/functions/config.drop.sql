@@ -13,7 +13,7 @@
 --------------------------------------------------------------------------
 
 -- Reference functions:
-DROP FUNCTION IF EXISTS make_configkey(par_confentity_key t_confentity_key, par_config varchar, par_cfgid_is_lnged boolean);
+DROP FUNCTION IF EXISTS make_configkey(par_confentity_key t_confentity_key, par_config varchar, par_cfgid_is_lnged boolean, par_config_lng t_code_key_by_lng);
 DROP FUNCTION IF EXISTS make_configkey_null();
 DROP FUNCTION IF EXISTS make_configkey_bystr(par_confentity_id integer, par_config varchar);
 DROP FUNCTION IF EXISTS make_configkey_bystr2(par_confentity_str varchar, par_config varchar);

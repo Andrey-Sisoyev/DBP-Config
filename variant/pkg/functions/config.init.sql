@@ -12,7 +12,7 @@
 --------------------------------------------------------------------------
 --------------------------------------------------------------------------
 
-CREATE TYPE t_config_key AS (confentity_key t_confentity_key, config_id varchar, cfgid_is_lnged boolean);
+CREATE TYPE t_config_key AS (confentity_key t_confentity_key, config_id varchar, cfgid_is_lnged boolean, config_lng t_code_key_by_lng);
 
 COMMENT ON TYPE t_config_key IS
 'Extension of "t_confentity_key" - sufficient to address (also) any config.
@@ -24,20 +24,20 @@ Many functions will raise exception, if value of "cfgid_is_lnged" is NULL.
 
 --------------
 
-CREATE OR REPLACE FUNCTION make_configkey(par_confentity_key t_confentity_key, par_config varchar, par_cfgid_is_lnged boolean) RETURNS t_config_key AS $$
-        SELECT ROW($1, $2, $3) :: sch_<<$app_name$>>.t_config_key;
+CREATE OR REPLACE FUNCTION make_configkey(par_confentity_key t_confentity_key, par_config varchar, par_cfgid_is_lnged boolean, par_config_lng t_code_key_by_lng) RETURNS t_config_key AS $$
+        SELECT ROW($1, $2, $3, $4) :: sch_<<$app_name$>>.t_config_key;
 $$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION make_configkey_null() RETURNS t_config_key AS $$
-        SELECT ROW(sch_<<$app_name$>>.make_confentitykey_null(), NULL :: varchar, NULL :: boolean) :: sch_<<$app_name$>>.t_config_key;
+        SELECT ROW(sch_<<$app_name$>>.make_confentitykey_null(), NULL :: varchar, NULL :: boolean, sch_<<$app_name$>>.make_codekeyl_null()) :: sch_<<$app_name$>>.t_config_key;
 $$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION make_configkey_bystr(par_confentity_id integer, par_config varchar) RETURNS t_config_key AS $$
-        SELECT ROW(sch_<<$app_name$>>.make_confentitykey_byid($1), $2, FALSE) :: sch_<<$app_name$>>.t_config_key;
+        SELECT ROW(sch_<<$app_name$>>.make_confentitykey_byid($1), $2, FALSE, sch_<<$app_name$>>.make_codekeyl_null()) :: sch_<<$app_name$>>.t_config_key;
 $$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION make_configkey_bystr2(par_confentity_str varchar, par_config varchar) RETURNS t_config_key AS $$
-        SELECT ROW(sch_<<$app_name$>>.make_confentitykey_bystr($1), $2, FALSE) :: sch_<<$app_name$>>.t_config_key;
+        SELECT ROW(sch_<<$app_name$>>.make_confentitykey_bystr($1), $2, FALSE, sch_<<$app_name$>>.make_codekeyl_null()) :: sch_<<$app_name$>>.t_config_key;
 $$ LANGUAGE SQL IMMUTABLE;
 
 --------------
@@ -45,7 +45,7 @@ $$ LANGUAGE SQL IMMUTABLE;
 CREATE OR REPLACE FUNCTION config_is_null(par_config_key t_config_key, par_total boolean) RETURNS boolean AS $$
         SELECT CASE WHEN $1 IS NULL THEN TRUE
                     ELSE (CASE WHEN $2 THEN
-                                (sch_<<$app_name$>>.confentity_is_null(($1).confentity_key) AND (($1).config_id IS NULL) AND (($1).cfgid_is_lnged IS NULL))
+                                (sch_<<$app_name$>>.confentity_is_null(($1).confentity_key) AND (($1).config_id IS NULL) AND (($1).cfgid_is_lnged IS NULL)) AND (sch_<<$app_name$>>.codekeyl_type(($1).config_lng) = 'undef')
                                ELSE
                                 (sch_<<$app_name$>>.confentity_is_null(($1).confentity_key) OR  (($1).config_id IS NULL) OR  (($1).cfgid_is_lnged IS NULL))
                           END
@@ -61,9 +61,9 @@ $$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION show_configkey(par_configkey t_config_key) RETURNS varchar AS $$
         SELECT '{t_config_key | '
-            || ( CASE WHEN config_is_null($1, TRUE) THEN 'NULL'
-                      ELSE (  CASE WHEN confentity_is_null(($1).confentity_key) THEN ''
-                                   ELSE 'confentity_key:' || show_confentitykey(($1).confentity_key) || ';'
+            || ( CASE WHEN sch_<<$app_name$>>.config_is_null($1, TRUE) THEN 'NULL'
+                      ELSE (  CASE WHEN sch_<<$app_name$>>.confentity_is_null(($1).confentity_key) THEN ''
+                                   ELSE 'confentity_key:' || sch_<<$app_name$>>.show_confentitykey(($1).confentity_key) || ';'
                               END
                            )
                         || (  CASE WHEN ($1).config_id IS NULL THEN ''
@@ -71,7 +71,11 @@ CREATE OR REPLACE FUNCTION show_configkey(par_configkey t_config_key) RETURNS va
                               END
                            )
                         || (  CASE WHEN ($1).cfgid_is_lnged IS NULL THEN ''
-                                   ELSE 'cfgid_is_lnged:' || ($1).cfgid_is_lnged
+                                   ELSE 'cfgid_is_lnged:' || ($1).cfgid_is_lnged || '";'
+                              END
+                           )
+                        || (  CASE WHEN sch_<<$app_name$>>.codekeyl_type(($1).config_lng) = 'undef' THEN ''
+                                   ELSE 'config_lng:' || show_codekeyl(($1).config_lng)
                               END
                            )
                       END
@@ -84,14 +88,18 @@ $$ LANGUAGE SQL IMMUTABLE;
 CREATE OR REPLACE FUNCTION show_configkeys_list(par_configkeys_list t_config_key[]) RETURNS varchar
 LANGUAGE plpgsql IMMUTABLE
 AS $$
-DECLARE r varchar; i integer; l integer;
+DECLARE r varchar; p varchar; i integer; l integer;
 BEGIN
         l:= array_length(par_configkeys_list, 1); i:= 0;
         r:= '{';
         WHILE i < l LOOP
                 IF i != 0 THEN r:= r || ';'; END IF;
                 i:= i + 1;
-                r:= r || '(' || sch_<<$app_name$>>.code_id_of_confentitykey((par_configkeys_list[i]).confentity_key) || ', "' || (par_configkeys_list[i]).config_id || '")';
+                p:= '';
+                IF sch_<<$app_name$>>.codekeyl_type((par_configkeys_list[i]).config_lng) != 'undef' THEN
+                        p:= ' , lng ' || (((par_configkeys_list[i]).config_lng).code_key).code_id;
+                END IF;
+                r:= r || '( ce_id ' || sch_<<$app_name$>>.code_id_of_confentitykey((par_configkeys_list[i]).confentity_key) || ', cfg "' || (par_configkeys_list[i]).config_id || '"' || p || ')';
         END LOOP;
         r:= r || '}';
         RETURN r;
@@ -99,8 +107,8 @@ END;
 $$;
 
 COMMENT ON FUNCTION show_configkeys_list(par_configkeys_list t_config_key[]) IS '
-It is assumed, that target list contains all *optimized* keys - ones containing determined "confentity_code_id" and delanguaged "config_id" !!
-If list contains "NULL :: t_config_key" (or "make_configkey_null()"), the whole result will be NULL.
+It is assumed, that target list contains all *optimized* keys - ones containing determined "confentity_code_id", delanguaged "config_id", and NULL or optimized value in "config_lng" field !!
+If list contains "make_configkey_null()", the whole result will be NULL (which is function failure); "NULL :: t_config_key" - makes DBMS go with an error.
 ';
 
 --------------
@@ -114,7 +122,19 @@ BEGIN
                 RAISE EXCEPTION 'An error occurred in the "optimized_configkey_isit" function for parameter value: %! Argument is not allowed to have NULL in ".cfgid_is_lnged"!', sch_<<$app_name$>>.show_configkey(par_configkey);
         END IF;
         SELECT CASE WHEN sch_<<$app_name$>>.config_is_null($1, TRUE) THEN FALSE
-                    ELSE sch_<<$app_name$>>.optimized_confentitykey_isit(par_configkey.confentity_key) AND par_configkey.config_id IS NOT NULL
+                    ELSE CASE par_configkey.config_id IS NOT NULL
+                             WHEN TRUE THEN
+                                 CASE sch_<<$app_name$>>.optimized_confentitykey_isit(par_configkey.confentity_key)
+                                     WHEN TRUE THEN
+                                         CASE sch_<<$app_name$>>.codekeyl_type(par_configkey.config_lng)
+                                             WHEN 'undef' THEN TRUE
+                                             WHEN  'c_id' THEN TRUE
+                                             ELSE FALSE
+                                         END
+                                     ELSE FALSE
+                                 END
+                             ELSE FALSE
+                         END
                END
         INTO r;
         RETURN r;
@@ -132,6 +152,9 @@ DECLARE
         n varchar;
         r sch_<<$app_name$>>.t_config_key;
         rows_count integer;
+        i int;
+        lng_code t_code_key_by_lng;
+        ackl     t_addressed_code_key_by_lng;
 BEGIN
         IF sch_<<$app_name$>>.optimized_configkey_isit(par_configkey) AND NOT par_verify THEN
                 RETURN par_configkey;
@@ -170,7 +193,54 @@ BEGIN
                 END IF;
                 n:= par_configkey.config_id;
         END IF;
-        r:= make_configkey(g, n, FALSE);
+
+        lng_code:= par_configkey.config_lng;
+        CASE codekeyl_type(lng_code)
+            WHEN 'undef' THEN -- do nothing
+            WHEN 'c_id' THEN
+                IF par_verify THEN
+                        SELECT 1 INTO i
+                        FROM configurations_bylngs AS cfg_l
+                        WHERE configuration_id = par_configkey.config_id
+                          AND confentity_code_id = ((g.confentity_codekeyl).code_key).code_id
+                          AND values_lng_code_id = (lng_code.code_key).code_id;
+
+                        GET DIAGNOSTICS rows_count = ROW_COUNT;
+
+                        IF (rows_count != 1) THEN
+                                RAISE EXCEPTION 'An error occurred in function "optimize_configkey" for key: %! Languaged config not found.', show_configkey(par_configkey);
+                        END IF;
+
+                END IF;
+            ELSE ackl:= optimize_acodekeyl(
+                                par_ifexists
+                              , generalize_codekeyl_wcf(
+                                        make_codekey_byid((get_nonplaincode_by_str('Languages')).code_id) -- using integer ID here abstracts codifier from language
+                                      , lng_code
+                                      )
+                              , 1 -- determination preference: code
+                              , 1 -- determination imperative: code
+                              );
+
+                 lng_code:= make_confentitykey(make_codekeyl(ackl.key_lng, ackl.code_key));
+
+                 IF par_verify THEN
+                        SELECT 1 INTO i
+                        FROM configurations_bylngs AS cfg_l
+                        WHERE configuration_id = par_configkey.config_id
+                          AND confentity_code_id = ((g.confentity_codekeyl).code_key).code_id
+                          AND values_lng_code_id = (lng_code.code_key).code_id;
+
+                        GET DIAGNOSTICS rows_count = ROW_COUNT;
+
+                        IF (rows_count != 1) THEN
+                                RAISE EXCEPTION 'An error occurred in function "optimize_configkey" for key: %! Languaged config not found.', show_configkey(par_configkey);
+                        END IF;
+
+                 END IF;
+        END CASE;
+
+        r:= make_configkey(g, n, FALSE, lng_code);
 
         RETURN r;
 END;
@@ -217,11 +287,21 @@ DECLARE
 BEGIN
         g:= optimize_configkey(par_configkey, FALSE);
 
-        SELECT complete_isit
-        INTO r
-        FROM configurations AS c
-        WHERE c.confentity_code_id = code_id_of_confentitykey(g.confentity_key)
-          AND c.configuration_id   = g.config_id;
+        CASE codekeyl_type(g.config_lng)
+            WHEN 'undef' THEN -- do nothing
+                SELECT complete_isit
+                INTO r
+                FROM configurations AS c
+                WHERE c.confentity_code_id = code_id_of_confentitykey(g.confentity_key)
+                  AND c.configuration_id   = g.config_id;
+            WHEN 'c_id' THEN
+                SELECT complete_isit
+                INTO r
+                FROM configurations_bylngs AS c
+                WHERE c.confentity_code_id = code_id_of_confentitykey(g.confentity_key)
+                  AND c.configuration_id   = g.config_id
+                  AND values_lng_code_id = ((g.config_lng).code_key).code_id;
+        END CASE;
 
         IF r IS NULL THEN r:= 'nf_X'; END IF;
 
@@ -231,7 +311,8 @@ $$;
 
 COMMENT ON FUNCTION is_confentity_default(par_configkey t_config_key) IS
 'It is advised to do the "optimize_configkey(par_configkey)" beforehand, if par_configkey is to be reused.
-Raises an exception, if confentity is not optimized and isn''t found, but returns ''nf_X'', if config is not found.
+Raises an exception, if confentity is not optimized AND isn''t found, but returns ''nf_X'', if config is not found.
+Depending on "config_lng" reads either from "configurations" table, or from "configurations_bylngs".
 ';
 
 -------------
@@ -246,11 +327,21 @@ DECLARE
 BEGIN
         g:= optimize_configkey(par_configkey, FALSE);
 
-        SELECT completeness_as_regulator
-        INTO r
-        FROM configurations AS c
-        WHERE c.confentity_code_id = code_id_of_confentitykey(g.confentity_key)
-          AND c.configuration_id   = g.config_id;
+        CASE codekeyl_type(g.config_lng)
+            WHEN 'undef' THEN -- do nothing
+                SELECT completeness_as_regulator
+                INTO r
+                FROM configurations AS c
+                WHERE c.confentity_code_id = code_id_of_confentitykey(g.confentity_key)
+                  AND c.configuration_id   = g.config_id;
+            WHEN 'c_id' THEN
+                SELECT completeness_as_regulator
+                INTO r
+                FROM configurations_bylngs AS c
+                WHERE c.confentity_code_id = code_id_of_confentitykey(g.confentity_key)
+                  AND c.configuration_id   = g.config_id
+                  AND c.values_lng_code_id = ((g.config_lng).code_key).code_id;
+        END CASE;
 
         RETURN r;
 END;
@@ -259,7 +350,8 @@ $$;
 COMMENT ON FUNCTION read_role__completeness_as_regulator(par_configkey t_config_key) IS
 'It is advised to do the "optimize_configkey(par_configkey)" beforehand, if par_configkey is to be reused.
 Reads "completeness_as_regulator" field value.
-Raises an exception, if confentity is not optimized and isn''t found, but returns NULL, if config is not found.
+Raises an exception, if confentity is not optimized AND isn''t found, but returns NULL, if config is not found.
+Depending on "config_lng" reads either from "configurations" table, or from "configurations_bylngs".
 ';
 
 --------------------------------------------------------------------------
@@ -312,6 +404,48 @@ COMMENT ON FUNCTION new_config(
 'Returns count of rows inserted. The "par_config_id" parameter is not languaged.
 If "par_ifdoesnt_exist" is FALSE and config already exists, then exception is raised.';
 
+--------------------------------------
+
+CREATE OR REPLACE FUNCTION add_languaged_config(
+                par_configkey t_config_key
+              , par_cfg_lng t_code_key_by_lng
+              ) RETURNS integer
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql
+AS $$
+DECLARE target_confentity_id integer;
+        rows_count integer;
+        c_exists boolean;
+        g    t_config_key;
+        ackl t_addressed_code_key_by_lng;
+BEGIN
+        g:= optimize_configkey(par_configkey, FALSE);
+
+        ackl:= optimize_acodekeyl(
+                        par_ifexists
+                      , generalize_codekeyl_wcf(
+                                make_codekey_byid((get_nonplaincode_by_str('Languages')).code_id) -- using integer ID here abstracts codifier from language
+                              , par_cfg_lng
+                              )
+                      , 1 -- determination preference: code
+                      , 1 -- determination imperative: code
+                      );
+
+        INSERT INTO configurations_bylng(confentity_code_id, configuration_id, values_lng_code_id)
+        VALUES (code_id_of_confentitykey(g.confentity_key), g.config_id, (ackl.code_key).code_id);
+
+        GET DIAGNOSTICS rows_count = ROW_COUNT;
+
+        RETURN rows_count;
+END;
+$$;
+
+COMMENT ON FUNCTION add_languaged_config(
+                par_configkey t_config_key
+              , par_cfg_lng t_code_key_by_lng
+              ) IS
+'Returns count of rows inserted. Adds a languaged config to "configurations_bylng" table.
+Config is assumed to already persist in "configurations" table, orelse exception is rised.';
 --------------------------------------
 
 CREATE OR REPLACE FUNCTION add_config_names(
@@ -394,6 +528,7 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
         target_confentity_id integer;
+        rec RECORD;
         rows_count integer;
         rows_count_add integer;
         compl sch_<<$app_name$>>.t_config_completeness_check_result;
@@ -413,8 +548,22 @@ BEGIN
         WHERE c.confentity_code_id = target_confentity_id
           AND c.configuration_id   = g.config_id;
 
-        INSERT INTO configurations_parameters_values__subconfigs
-               SELECT *
+        INSERT INTO configurations_parameters_values__subconfigs (
+                        confentity_code_id
+                      , parameter_id
+                      , configuration_id
+                      , subconfentity_code_id
+                      , subconfiguration_id
+                      , subconfiguration_link
+                      , subconfiguration_link_usage
+                      )
+               SELECT cpv_s.confentity_code_id
+                    , cpv_s.parameter_id
+                    , par_clone_config_id
+                    , cpv_s.subconfentity_code_id
+                    , cpv_s.subconfiguration_id
+                    , cpv_s.subconfiguration_link
+                    , cpv_s.subconfiguration_link_usage
                FROM configurations_parameters_values__subconfigs AS cpv_s
                WHERE cpv_s.confentity_code_id = target_confentity_id
                  AND cpv_s.configuration_id   = g.config_id;
@@ -422,8 +571,16 @@ BEGIN
         GET DIAGNOSTICS rows_count_add = ROW_COUNT;
         rows_count:= rows_count_add + 1;
 
-        INSERT INTO configurations_parameters_values__leafs
-               SELECT *
+        INSERT INTO configurations_parameters_values__leafs (
+                        confentity_code_id
+                      , parameter_id
+                      , configuration_id
+                      , value
+                      )
+               SELECT cpv_l.confentity_code_id
+                    , cpv_l.parameter_id
+                    , par_clone_config_id
+                    , cpv_l.value
                FROM configurations_parameters_values__leafs AS cpv_l
                WHERE cpv_l.confentity_code_id = target_confentity_id
                  AND cpv_l.configuration_id   = g.config_id;
@@ -437,13 +594,66 @@ BEGIN
         WHERE c.confentity_code_id = target_confentity_id
           AND c.configuration_id   = par_clone_config_id;
 
+        INSERT INTO configurations_names (confentity_code_id, configuration_id, name, lng_of_name, description, comments)
+                SELECT cn.confentity_code_id, par_clone_config_id, cn.name, cn.lng_of_name, cn.description, cn.comments
+                FROM configurations_names AS cn
+                WHERE cn.confentity_code_id = target_confentity_id
+                  AND cn.configuration_id   = g.config_id;
+
+        ------------
+
+        INSERT INTO configurations_bylngs(confentity_code_id, configuration_id, values_lng_code_id, complete_isit, completeness_as_regulator)
+                SELECT target_confentity_id
+                     , par_clone_config_id
+                     , c.values_lng_code_id
+                     , 'li_chk_X'
+                     , 'SET INCOMPLETE'
+                FROM configurations_bylngs AS c
+                WHERE c.confentity_code_id = target_confentity_id
+                  AND c.configuration_id   = g.config_id;
+
+        GET DIAGNOSTICS rows_count_add = ROW_COUNT;
+        rows_count:= rows_count_add + 1;
+
+        INSERT INTO configurations_parameters_lngvalues__leafs (
+                        confentity_code_id
+                      , parameter_id
+                      , configuration_id
+                      , value_lng_code_id
+                      , value
+                      )
+               SELECT cplv_l.confentity_code_id
+                    , cplv_l.parameter_id
+                    , par_clone_config_id
+                    , cplv_l.value_lng_code_id
+                    , cplv_l.value
+               FROM configurations_parameters_lngvalues__leafs AS cplv_l
+               WHERE cplv_l.confentity_code_id = target_confentity_id
+                 AND cplv_l.configuration_id   = g.config_id;
+
+        GET DIAGNOSTICS rows_count_add = ROW_COUNT;
+        rows_count:= rows_count_add + 1;
+
+        FOR rec IN
+                SELECT *
+                FROM configurations_bylngs AS c
+                WHERE c.confentity_code_id = target_confentity_id
+                  AND c.configuration_id   = g.config_id
+        LOOP UPDATE configurations_bylngs
+             SET complete_isit = rec.complete_isit
+               , completeness_as_regulator = rec.completeness_as_regulator
+             WHERE c.confentity_code_id = target_confentity_id
+               AND c.configuration_id   = par_clone_config_id
+               AND c.value_lng_code_id  = rec.value_lng_code_id;
+        END LOOP;
+
         RETURN rows_count;
 END;
 $$;
 
 COMMENT ON FUNCTION clone_config(par_config_key t_config_key, par_clone_config_id varchar) IS
 'Returns count of rows inserted (including rows in parameter-values tables).
-Creates a copy of config identified by "par_config_key" parameter. Copy includes all the parameters.
+Creates a copy of config identified by "par_config_key" parameter. Copy includes all the parameters, names/descriptions and languaged configs.
 The "par_clone_config_id" parameter is not languaged.
 ';
 
@@ -643,7 +853,7 @@ The function parmeters with "par_warn_with_*"       prefix -> outputs warning wi
 -- GRANTS
 
 -- Reference functions:
-GRANT EXECUTE ON FUNCTION make_configkey(par_confentity_key t_confentity_key, par_config varchar, par_cfgid_is_lnged boolean)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION make_configkey(par_confentity_key t_confentity_key, par_config varchar, par_cfgid_is_lnged boolean, par_config_lng t_code_key_by_lng)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION make_configkey_null()TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION make_configkey_bystr(par_confentity_id integer, par_config varchar)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION make_configkey_bystr2(par_confentity_str varchar, par_config varchar)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;

@@ -14,7 +14,7 @@
 
 -- Reference functions:
 DROP FUNCTION IF EXISTS mk_cpvalue_null();
-DROP FUNCTION IF EXISTS mk_cpvalue_l(value varchar);
+DROP FUNCTION IF EXISTS mk_cpvalue_l(value varchar, lng integer);
 DROP FUNCTION IF EXISTS mk_cpvalue_s(value varchar, subcfg_ref_param_id varchar, subcfg_ref_usage t_subconfig_value_linking_read_rule);
 DROP FUNCTION IF EXISTS isconsistent_cpvalue(par_value t_cpvalue_uni);
 DROP FUNCTION IF EXISTS isdefined_cpvalue(par_value t_cpvalue_uni);
@@ -27,9 +27,9 @@ DROP FUNCTION IF EXISTS mk_cparameter_uni(
         , par_allow_null_final_value      boolean
         , par_use_default_instead_of_null t_confparam_default_usage
         , par_subconfentity_code_id       integer
+        , par_par_lnged_paramvalue_dflt_src t_lnged_paramvalue_dflt_src
         , par_default_value               t_cpvalue_uni
-        )
-;
+        );
 
 DROP FUNCTION IF EXISTS make_confentityparamkey(par_confentity_key t_confentity_key, key varchar, key_is_lnged boolean);
 DROP FUNCTION IF EXISTS make_confentityparamkey_null();

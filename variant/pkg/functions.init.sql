@@ -100,7 +100,28 @@ $$;
 
 --------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION update_cfgs_ondepmodify(par_deps_list t_configs_tree_rel[], par_exclude_cfg t_config_key) RETURNS boolean
+CREATE OR REPLACE FUNCTION read_cfgmngsys_setup__autoadd_lnged_cfgs() RETURNS boolean
+LANGUAGE plpgsql
+AS $$
+DECLARE
+        r boolean;
+        o varchar;
+        cms_setup sch_<<$app_name$>>.t_cparameter_value_uni[];
+BEGIN
+        cms_setup:= sch_<<$app_name$>>.read_cfgmngsys_setup();
+        o:= upper((cms_setup[sch_<<$app_name$>>.get_param_from_list(cms_setup, 'autoadd languaged sub-/superconfigs')]).final_value);
+        CASE o
+            WHEN 'ENABLED'  THEN r:= TRUE;
+            WHEN 'DISABLED' THEN r:= FALSE;
+            ELSE RAISE EXCEPTION 'Error in the "read_cfgmngsys_setup__perform_completness_routines" TRIGGER function! Unsupported option for "completeness check routines": "%".', o;
+        END CASE;
+        RETURN r;
+END;
+$$;
+
+--------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION update_cfgs_ondepmodify(par_deps_list t_configs_tree_rel[], par_exclude_cfg t_config_key, par_val_lng_id integer) RETURNS boolean
 SET search_path = sch_<<$app_name$>> -- , comn_funs, public
 LANGUAGE plpgsql
 AS $$
@@ -128,11 +149,24 @@ BEGIN
         on_actualize:= upper((cms_setup[get_param_from_list(cms_setup, occa_option_name              )]).final_value);
         report_mode:=       ((cms_setup[get_param_from_list(cms_setup, 'report on completeness check')]).final_value) :: t_thorough_report_warning_mode;
 
-        analized_cfgs:= analyze_cfgs_tree(par_deps_list, par_exclude_cfg, FALSE); -- we will process deepest configs first
+        analized_cfgs:= analyze_cfgs_tree(par_deps_list, par_exclude_cfg, FALSE, par_val_lng_id); -- we will process deepest configs first
         IF array_length(analized_cfgs.involved_in_cycles, 1) > 0 THEN
                 RAISE WARNING 'Warning by "update_cfgs_ondepmodify" function! Referential cycle is detected for a set of configurations. Completeness check for configuration referential cycles are not supported in this version - it is assumed to be INCOMPLETE. In order to use this version of configuration control system properly, please, get rid of referential cycles in your configs graph. Configurations involved in cycles: % ; configurations that refers cycled subconfigs: % .', show_configkeys_list(analized_cfgs.involved_in_cycles), show_configkeys_list(analized_cfgs.dep_on_cycles);
 
                 UPDATE configurations
+                SET complete_isit = 'cy_X'
+                WHERE complete_isit <> 'cy_X'
+                  AND ROW(confentity_code_id, configuration_id)
+                          IN ( SELECT code_id_of_confentitykey(x.confentity_key)
+                                    , x.config_id
+                               FROM unnest (analized_cfgs.involved_in_cycles) AS x -- t_config_key
+                               UNION
+                               SELECT code_id_of_confentitykey(x.confentity_key)
+                                    , x.config_id
+                               FROM unnest (analized_cfgs.dep_on_cycles) AS x -- t_config_key
+                             );
+                -- cycles are independant from languages
+                UPDATE configurations_bylngs
                 SET complete_isit = 'cy_X'
                 WHERE complete_isit <> 'cy_X'
                   AND ROW(confentity_code_id, configuration_id)
@@ -167,20 +201,39 @@ BEGIN
                                 RAISE EXCEPTION 'Halt by "update_cfgs_ondepmodify" function! Any change that leaves any involved configuration incomplete is currently restricted in the "Configuration management system setup". Halt triggered for config that has option {"%" == "%", by default: %}, where config is %.', occa_option_name, occa, occa_use_dflt, show_configkey(cfg);
                             WHEN 'STRICT CHECK' THEN
                                 complete:= NULL;
-                                SELECT completeness_interpretation(
-                                                config_completeness(
-                                                  cfg         -- target
-                                                , 1           -- thorough check current cfg, light check subs.
-                                                , report_mode -- report
-                                                , 0           -- no update
-                                       )        )
-                                INTO complete
-                                FROM configurations AS c
-                                WHERE c.configuration_id   = cfg.config_id
-                                  AND c.confentity_code_id = code_id_of_confentitykey(cfg.confentity_key)
-                                  AND (always_isit OR completeness_interpretation(c.complete_isit));
+                                CASE par_val_lng_id IS NULL
+                                    WHEN TRUE THEN
+                                        SELECT completeness_interpretation(
+                                                        config_completeness(
+                                                          cfg         -- target
+                                                        , 1           -- thorough check current cfg, light check subs.
+                                                        , report_mode -- report
+                                                        , 0           -- no update
+                                               )        )
+                                        INTO complete
+                                        FROM configurations AS c
+                                        WHERE c.configuration_id   = cfg.config_id
+                                          AND c.confentity_code_id = code_id_of_confentitykey(cfg.confentity_key)
+                                          AND (always_isit OR completeness_interpretation(c.complete_isit));
 
-                                GET DIAGNOSTICS rows_cnt = ROW_COUNT;
+                                        GET DIAGNOSTICS rows_cnt = ROW_COUNT;
+                                    ELSE
+                                        SELECT completeness_interpretation(
+                                                        config_completeness(
+                                                          cfg         -- target
+                                                        , 1           -- thorough check current cfg, light check subs.
+                                                        , report_mode -- report
+                                                        , 0           -- no update
+                                               )        )
+                                        INTO complete
+                                        FROM configurations_bylngs AS c
+                                        WHERE c.configuration_id   = cfg.config_id
+                                          AND c.confentity_code_id = code_id_of_confentitykey(cfg.confentity_key)
+                                          AND (always_isit OR completeness_interpretation(c.complete_isit))
+                                          AND c.values_lng_code_id = par_val_lng_id;
+
+                                        GET DIAGNOSTICS rows_cnt = ROW_COUNT;
+                                END CASE;
 
                                 IF (complete IS NOT DISTINCT FROM TRUE) OR (complete IS NULL AND rows_cnt = 0) THEN
                                         -- ok!
@@ -188,25 +241,53 @@ BEGIN
                                         RAISE EXCEPTION 'Halt by "update_cfgs_ondepmodify" function! Any change that leaves any involved configuration incomplete is currently restricted in the "Configuration management system setup". Halt triggered for config that has option {"%" == "%", by default: %}, where config is %.', occa_option_name, occa, occa_use_dflt, show_configkey(cfg);
                                 END IF;
                             WHEN 'CHECK SET'      THEN
-                                PERFORM completeness_interpretation(config_completeness(
-                                          cfg         -- target
-                                        , 1           -- thorough check current cfg, light check subs.
-                                        , report_mode -- report
-                                        , 10          -- update only current config
-                                       ))
-                                FROM configurations AS c
-                                WHERE c.configuration_id   = cfg.config_id
-                                  AND c.confentity_code_id = code_id_of_confentitykey(cfg.confentity_key)
-                                  AND (always_isit OR completeness_interpretation(c.complete_isit));
+                                CASE par_val_lng_id IS NULL
+                                    WHEN TRUE THEN
+                                        PERFORM completeness_interpretation(config_completeness(
+                                                  cfg         -- target
+                                                , 1           -- thorough check current cfg, light check subs.
+                                                , report_mode -- report
+                                                , 10          -- update only current config
+                                               ))
+                                        FROM configurations AS c
+                                        WHERE c.configuration_id   = cfg.config_id
+                                          AND c.confentity_code_id = code_id_of_confentitykey(cfg.confentity_key)
+                                          AND (always_isit OR completeness_interpretation(c.complete_isit));
+                                    ELSE
+                                        PERFORM completeness_interpretation(config_completeness(
+                                                  cfg         -- target
+                                                , 1           -- thorough check current cfg, light check subs.
+                                                , report_mode -- report
+                                                , 10          -- update only current config
+                                               ))
+                                        FROM configurations_bylngs AS c
+                                        WHERE c.configuration_id   = cfg.config_id
+                                          AND c.confentity_code_id = code_id_of_confentitykey(cfg.confentity_key)
+                                          AND (always_isit OR completeness_interpretation(c.complete_isit))
+                                          AND c.values_lng_code_id = par_val_lng_id;
+                                END CASE;
                             WHEN 'SET INCOMPLETE' THEN
-                                UPDATE configurations AS c
-                                SET complete_isit = 'li_chk_X'
-                                WHERE complete_isit <> 'li_chk_X'
-                                  AND c.configuration_id   = cfg.config_id
-                                  AND c.confentity_code_id = code_id_of_confentitykey(cfg.confentity_key)
-                                  AND completeness_interpretation(c.complete_isit);
+                                CASE par_val_lng_id IS NULL
+                                    WHEN TRUE THEN
+                                        UPDATE configurations AS c
+                                        SET complete_isit = 'li_chk_X'
+                                        WHERE complete_isit <> 'li_chk_X'
+                                          AND c.configuration_id   = cfg.config_id
+                                          AND c.confentity_code_id = code_id_of_confentitykey(cfg.confentity_key)
+                                          AND completeness_interpretation(c.complete_isit);
 
-                                GET DIAGNOSTICS rows_cnt = ROW_COUNT;
+                                        GET DIAGNOSTICS rows_cnt = ROW_COUNT;
+                                    ELSE
+                                        UPDATE configurations_bylngs AS c
+                                        SET complete_isit = 'li_chk_X'
+                                        WHERE complete_isit <> 'li_chk_X'
+                                          AND c.configuration_id   = cfg.config_id
+                                          AND c.confentity_code_id = code_id_of_confentitykey(cfg.confentity_key)
+                                          AND completeness_interpretation(c.complete_isit)
+                                          AND c.values_lng_code_id = par_val_lng_id;
+
+                                        GET DIAGNOSTICS rows_cnt = ROW_COUNT;
+                                END CASE;
 
                                 IF    (rows_cnt != 0)
                                   AND (  report_mode IS NOT DISTINCT FROM 'ALWAYS'
@@ -228,11 +309,14 @@ $$;
 -- GRANTS
 
 -- Lookup functions:
-GRANT EXECUTE ON FUNCTION read_cfgmngsys_setup()TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION read_cfgmngsys_setup__output_credel_notices()TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION read_cfgmngsys_setup() TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION read_cfgmngsys_setup__output_credel_notices() TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION read_cfgmngsys_setup__perform_completness_routines() TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION read_cfgmngsys_setup__autoadd_lnged_cfgs() TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+
 
 -- Administration functions:
-GRANT EXECUTE ON FUNCTION update_cfgs_ondepmodify(par_deps_list t_configs_tree_rel[], par_exclude_cfg t_config_key) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
+GRANT EXECUTE ON FUNCTION update_cfgs_ondepmodify(par_deps_list t_configs_tree_rel[], par_exclude_cfg t_config_key, par_val_lng_id integer) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
 
 --------------------------------------------------------------------------
 --------------------------------------------------------------------------

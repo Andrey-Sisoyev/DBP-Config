@@ -144,12 +144,16 @@ SELECT cfg_tree_2_cfgs(
                 sub_cfgs_of(
                         make_configkey_bystr2('TC2_D_102', 'TC2_D_102_CFG1')
                       , cfg_tree_rel_main_types_set(TRUE)
-       )              );
+                      )
+              , NULL :: integer
+       );
 SELECT cfg_tree_2_cfgs(
                 sub_cfgs_of(
                         make_configkey_bystr2('TC2_A_105', 'TC2_A_105_CFG1')
                       , cfg_tree_rel_main_types_set(TRUE)
-       )              );
+                      )
+              , NULL :: integer
+       );
 
 -----------------
 
@@ -160,6 +164,7 @@ SELECT analyze_cfgs_tree(
                       )
             , make_configkey_null()
             , TRUE
+            , NULL :: integer
        );
 SELECT analyze_cfgs_tree(
               sub_cfgs_of(
@@ -168,6 +173,7 @@ SELECT analyze_cfgs_tree(
                       )
             , make_configkey_null()
             , FALSE
+            , NULL :: integer
        );
 SELECT analyze_cfgs_tree(
               sub_cfgs_of(
@@ -176,6 +182,7 @@ SELECT analyze_cfgs_tree(
                       )
             , make_configkey_null()
             , TRUE
+            , NULL :: integer
        );
 SELECT analyze_cfgs_tree(
               sub_cfgs_of(
@@ -184,6 +191,7 @@ SELECT analyze_cfgs_tree(
                       )
             , make_configkey_null()
             , FALSE
+            , NULL :: integer
        );
 
 
@@ -259,6 +267,7 @@ SELECT set_confparam_value(
                 make_configparamkey_bystr3('Dummy_1_CE', 'Dummy_1_CFG', 'dummy_1_param_11')
               , mk_cpvalue_s(NULL :: varchar, 'dummy_1_param_1', 'alw_onl_lnk')
               , 10
+              , FALSE
               );
 SELECT subconfigparams_lnks_extraction(
              sub_cfgs_of(
@@ -318,6 +327,7 @@ SELECT * FROM unnest((analyze_cfgs_tree(
                 )
               , make_configkey_null()
               , TRUE
+              , NULL :: integer
        )).sorted_by_depth);
 
 SELECT * FROM unnest((analyze_cfgs_tree(
@@ -328,6 +338,7 @@ SELECT * FROM unnest((analyze_cfgs_tree(
                 )
               , make_configkey_null()
               , FALSE
+              , NULL :: integer
        )).sorted_by_depth);
 
 SELECT x.involved_in_cycles, x.dep_on_cycles
@@ -339,6 +350,7 @@ FROM unnest(array(SELECT analyze_cfgs_tree(
                 )
               , make_configkey_null()
               , TRUE
+              , NULL :: integer
        ))) AS x;
 
 SELECT x.involved_in_cycles, x.dep_on_cycles
@@ -350,6 +362,7 @@ FROM unnest(array(SELECT analyze_cfgs_tree(
                 )
               , make_configkey_null()
               , FALSE
+              , NULL :: integer
        ))) AS x;
 --------------------------------
 
@@ -470,6 +483,7 @@ SELECT * FROM unnest((analyze_cfgs_tree(related_cfgs_ofcfg(
                 )
            , make_configkey_null()
            , TRUE
+           , NULL :: integer
        )).sorted_by_depth);
 SELECT x.involved_in_cycles, x.dep_on_cycles
 FROM unnest(array(SELECT analyze_cfgs_tree(related_cfgs_ofcfg(
@@ -479,6 +493,7 @@ FROM unnest(array(SELECT analyze_cfgs_tree(related_cfgs_ofcfg(
                 )
            , make_configkey_null()
            , TRUE
+           , NULL :: integer
        ))) AS x;
 
 SELECT * FROM unnest((analyze_cfgs_tree(related_cfgs_ofcfg(
@@ -488,6 +503,7 @@ SELECT * FROM unnest((analyze_cfgs_tree(related_cfgs_ofcfg(
                 )
            , make_configkey_null()
            , FALSE
+           , NULL :: integer
        )).sorted_by_depth);
 SELECT x.involved_in_cycles, x.dep_on_cycles
 FROM unnest(array(SELECT analyze_cfgs_tree(related_cfgs_ofcfg(
@@ -497,6 +513,7 @@ FROM unnest(array(SELECT analyze_cfgs_tree(related_cfgs_ofcfg(
                 )
            , make_configkey_null()
            , FALSE
+           , NULL :: integer
        ))) AS x;
 
 \echo NOTICE >>>>>>>>>>>> MEGACHECK >TC1.#2 <<<<<<<<<<<<<<
@@ -525,6 +542,7 @@ SELECT * FROM unnest((analyze_cfgs_tree(related_cfgs_ofcfg(
                 )
            , make_configkey_null()
            , TRUE
+           , NULL :: integer
        )).sorted_by_depth);
 SELECT x.involved_in_cycles, x.dep_on_cycles
 FROM unnest(array(SELECT analyze_cfgs_tree(related_cfgs_ofcfg(
@@ -534,6 +552,7 @@ FROM unnest(array(SELECT analyze_cfgs_tree(related_cfgs_ofcfg(
                 )
            , make_configkey_null()
            , TRUE
+           , NULL :: integer
        ))) AS x;
 
 SELECT * FROM unnest((analyze_cfgs_tree(related_cfgs_ofcfg(
@@ -543,6 +562,7 @@ SELECT * FROM unnest((analyze_cfgs_tree(related_cfgs_ofcfg(
                 )
            , make_configkey_null()
            , FALSE
+           , NULL :: integer
        )).sorted_by_depth);
 SELECT x.involved_in_cycles, x.dep_on_cycles
 FROM unnest(array(SELECT analyze_cfgs_tree(related_cfgs_ofcfg(
@@ -552,6 +572,7 @@ FROM unnest(array(SELECT analyze_cfgs_tree(related_cfgs_ofcfg(
                 )
            , make_configkey_null()
            , FALSE
+           , NULL :: integer
        ))) AS x;
 
 \echo NOTICE >>>>>>>>>>>> MEGACHECK >TC3.#1 <<<<<<<<<<<<<<
@@ -564,6 +585,7 @@ SELECT * FROM unnest((analyze_cfgs_tree(
                 )
            , make_configkey_bystr2('TC3_201_sub', 'TC3_201_sub_CFG')
            , FALSE
+           , NULL :: integer
        )).sorted_by_depth);
 SELECT x.involved_in_cycles, x.dep_on_cycles
 FROM unnest(array(SELECT analyze_cfgs_tree(
@@ -574,6 +596,7 @@ FROM unnest(array(SELECT analyze_cfgs_tree(
                 )
            , make_configkey_bystr2('TC3_201_sub', 'TC3_201_sub_CFG')
            , FALSE
+           , NULL :: integer
        ))) AS x;
 
 SELECT * FROM unnest((analyze_cfgs_tree(
@@ -584,6 +607,7 @@ SELECT * FROM unnest((analyze_cfgs_tree(
                 )
            , make_configkey_bystr2('TC3_201_sub', 'TC3_201_sub_CFG')
            , FALSE
+           , NULL :: integer
        )).sorted_by_depth);
 SELECT x.involved_in_cycles, x.dep_on_cycles
 FROM unnest(array(SELECT analyze_cfgs_tree(
@@ -594,6 +618,7 @@ FROM unnest(array(SELECT analyze_cfgs_tree(
                 )
            , make_configkey_bystr2('TC3_201_sub', 'TC3_201_sub_CFG')
            , FALSE
+           , NULL :: integer
        ))) AS x;
 
 SELECT * FROM unnest((analyze_cfgs_tree(
@@ -604,6 +629,7 @@ SELECT * FROM unnest((analyze_cfgs_tree(
                 )
            , make_configkey_null()
            , TRUE
+           , NULL :: integer
        )).sorted_by_depth);
 SELECT x.involved_in_cycles, x.dep_on_cycles
 FROM unnest(array(SELECT analyze_cfgs_tree(
@@ -614,6 +640,7 @@ FROM unnest(array(SELECT analyze_cfgs_tree(
                 )
            , make_configkey_null()
            , TRUE
+           , NULL :: integer
        ))) AS x;
 
 SELECT * FROM unnest((analyze_cfgs_tree(
@@ -624,6 +651,7 @@ SELECT * FROM unnest((analyze_cfgs_tree(
                 )
            , make_configkey_null()
            , FALSE
+           , NULL :: integer
        )).sorted_by_depth);
 SELECT x.involved_in_cycles, x.dep_on_cycles
 FROM unnest(array(SELECT analyze_cfgs_tree(
@@ -634,4 +662,5 @@ FROM unnest(array(SELECT analyze_cfgs_tree(
                 )
            , make_configkey_null()
            , FALSE
+           , NULL :: integer
        ))) AS x;

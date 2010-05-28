@@ -38,6 +38,11 @@ DROP FUNCTION IF EXISTS new_confentity(
         , par_ifdoesnt_exist boolean
         , par_lng_names      name_construction_input[]
         );
+DROP FUNCTION IF EXISTS clone_confentity(
+          par_confentity_key    t_confentity_key
+        , par_new_name          varchar
+        , par_clone_configs_too boolean
+        );
 DROP FUNCTION IF EXISTS delete_confentity(
                   par_ifexists                           boolean
                 , par_confentity_key                     t_confentity_key

@@ -41,17 +41,24 @@ DELETE FROM dbp_packages WHERE package_name = '<<$pkg.name$>>'
 DROP INDEX pvs_confentities_of_params_idx;
 DROP INDEX pvs_params_of_confentities_idx;
 DROP TABLE configurations_parameters_values__subconfigs;
+
 DROP INDEX ps_confentities_of_params_idx;
 DROP INDEX ps_params_of_confentities_idx;
 DROP INDEX          cp_s_ilref_base_uidx;
 DROP TABLE configurations_parameters__subconfigs;
 DROP TYPE t_subconfig_value_linking_read_rule;
-DROP INDEX pvl_confentities_of_params_idx;
-DROP INDEX pvl_params_of_confentities_idx;
+
+DROP INDEX plvl_configurations_of_confentities_idx;
+DROP INDEX plvl_configurations_of_confentities_bylng_idx;
+DROP TABLE configurations_parameters_lngvalues__leafs;
+
+DROP INDEX pvl_configurations_of_confentities_idx;
 DROP TABLE configurations_parameters_values__leafs;
+
 DROP INDEX pl_confentities_of_params_idx;
 DROP INDEX pl_params_of_confentities_idx;
 DROP TABLE configurations_parameters__leafs;
+
 DROP INDEX names_of_confparams_idx;
 DROP TABLE configurations_parameters_names;
 
@@ -64,15 +71,18 @@ DROP TYPE t_confparam_default_usage;
 DROP FUNCTION mk_confparam_constraint(par_fun varchar);
 DROP TYPE t_confparam_constraint;
 DROP TYPE t_confparam_type;
+
 DROP INDEX names_of_configs_idx;
 DROP TABLE configurations_names;
 
 SELECT remove_code(TRUE, make_acodekeyl_bystr2('Named entities', 'configuration'), TRUE, TRUE, TRUE);
 
-DROP INDEX configs_confentities_idx;
+DROP INDEX confentities_configs_oflng_idx;
+DROP TABLE configurations_bylngs;
 
 ALTER TABLE configurable_entities DROP CONSTRAINT cnstr_confentities_default_configs;
 
+DROP INDEX confentities_configs_idx;
 DROP TABLE configurations;
 DROP TYPE t_completeness_as_regulator;
 DROP TYPE t_config_completeness_check_result;

@@ -26,7 +26,7 @@ DROP FUNCTION IF EXISTS make_configparamkey(par_config_key t_config_key, param_k
 DROP FUNCTION IF EXISTS make_configparamkey_null();
 DROP FUNCTION IF EXISTS make_configparamkey_bystr2(par_confentity_id integer, par_config_id varchar, par_param_key varchar);
 DROP FUNCTION IF EXISTS make_configparamkey_bystr3(par_confentity_str varchar, par_config_id varchar, par_param_key varchar);
-DROP FUNCTION IF EXISTS make_cop_from_cep(par_confparam_key t_confentityparam_key, par_config_id varchar, par_cfg_lnged boolean);
+DROP FUNCTION IF EXISTS make_cop_from_cep(par_confparam_key t_confentityparam_key, par_config_id varchar, par_cfg_lnged boolean, par_lng_of_value t_code_key_by_lng);
 DROP FUNCTION IF EXISTS make_cep_from_cop(par_configparam_key t_configparam_key);
 DROP FUNCTION IF EXISTS configparamkey_is_null(par_configparam_key t_configparam_key, par_total boolean);
 DROP FUNCTION IF EXISTS show_configparamkey(par_configparam_key t_configparam_key);
@@ -63,8 +63,8 @@ DROP FUNCTION IF EXISTS get_paramvalues(
 
 
 -- Administration functions:
-DROP FUNCTION IF EXISTS set_confparam_value(par_configparam_key t_configparam_key, par_cpvalue t_cpvalue_uni, par_overwrite integer);
-DROP FUNCTION IF EXISTS set_confparam_values_set(par_config t_config_key, par_pv_set t_paramvals__short[], par_overwrite integer);
+DROP FUNCTION IF EXISTS set_confparam_value(par_configparam_key t_configparam_key, par_cpvalue t_cpvalue_uni, par_overwrite integer, par_lng_autoadd boolean);
+DROP FUNCTION IF EXISTS set_confparam_values_set(par_config t_config_key, par_pv_set t_paramvals__short[], par_overwrite integer, par_lng_autoadd boolean);
 DROP FUNCTION IF EXISTS new_config(
                 par_ifdoesnt_exist  boolean
               , par_confentity_key  t_confentity_key

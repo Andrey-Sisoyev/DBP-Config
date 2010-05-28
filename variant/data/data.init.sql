@@ -59,7 +59,8 @@ BEGIN
                                 , FALSE                             -- not null
                                 , 'par_d'                           -- usage of default
                                 , NULL :: integer                   -- subconfentity_code_id (N/A)
-                                , mk_cpvalue_l('FOR COMPLETE ONLY') -- default value
+                                , 'nonlnged_val' :: t_lnged_paramvalue_dflt_src
+                                , mk_cpvalue_l('FOR COMPLETE ONLY', NULL :: integer) -- default value
                                 )
                               , mk_cparameter_uni(
                                   'completeness as regulator'
@@ -68,7 +69,8 @@ BEGIN
                                 , FALSE                             -- not null
                                 , 'par_d'                           -- usage of default
                                 , NULL :: integer                   -- subconfentity_code_id (N/A)
-                                , mk_cpvalue_l('CHECK SET')         -- default value
+                                , 'nonlnged_val'
+                                , mk_cpvalue_l('CHECK SET', NULL :: integer)         -- default value
                                 )
                               , mk_cparameter_uni(
                                   'report on completeness check'
@@ -77,7 +79,8 @@ BEGIN
                                 , FALSE                             -- not null
                                 , 'par_d'                           -- usage of default
                                 , NULL :: integer                   -- subconfentity_code_id (N/A)
-                                , mk_cpvalue_l('WHEN LOSING COMPLETENESS')         -- default value
+                                , 'nonlnged_val'
+                                , mk_cpvalue_l('WHEN LOSING COMPLETENESS', NULL :: integer)         -- default value
                                 )
                               , mk_cparameter_uni(
                                   'notice config items creation/deletion'
@@ -86,7 +89,8 @@ BEGIN
                                 , FALSE                             -- not null
                                 , 'par_d'                           -- usage of default
                                 , NULL :: integer                   -- subconfentity_code_id (N/A)
-                                , mk_cpvalue_l('ENABLED')         -- default value
+                                , 'nonlnged_val'
+                                , mk_cpvalue_l('ENABLED', NULL :: integer)         -- default value
                                 )
                               , mk_cparameter_uni(
                                   'completeness check routines'
@@ -95,7 +99,18 @@ BEGIN
                                 , FALSE                           -- not null
                                 , 'par_d'                         -- usage of default
                                 , NULL :: integer                 -- subconfentity_code_id (N/A)
-                                , mk_cpvalue_l('ENABLED')         -- default value
+                                , 'nonlnged_val'
+                                , mk_cpvalue_l('ENABLED', NULL :: integer)         -- default value
+                                )
+                              , mk_cparameter_uni(
+                                  'autoadd languaged sub-/superconfigs'
+                                , 'leaf'
+                                , ARRAY[ mk_confparam_constraint('upper($1) IN (''ENABLED'', ''DISABLED'') IS NOT NULL')] :: t_confparam_constraint[]
+                                , FALSE                           -- not null
+                                , 'par_d'                         -- usage of default
+                                , NULL :: integer                 -- subconfentity_code_id (N/A)
+                                , 'nonlnged_val'
+                                , mk_cpvalue_l('ENABLED', NULL :: integer)         -- default value
                                 )
                                ] :: t_cparameter_uni[]
                         )
@@ -105,12 +120,14 @@ BEGIN
                   FALSE
                 , make_confentitykey_bystr('Configuration management system setup')
                 , 'CMSS config #1'
-                , ARRAY [ ROW('when to check completeness'  , mk_cpvalue_l('FOR COMPLETE ONLY'))
-                        , ROW('completeness as regulator'   , mk_cpvalue_l('SET INCOMPLETE'))
-                        , ROW('report on completeness check', mk_cpvalue_l('WHEN LOSING COMPLETENESS'))
+                , ARRAY [ ROW('when to check completeness'  , mk_cpvalue_l('FOR COMPLETE ONLY', NULL :: integer))
+                        , ROW('completeness as regulator'   , mk_cpvalue_l('SET INCOMPLETE', NULL :: integer))
+                        , ROW('report on completeness check', mk_cpvalue_l('WHEN LOSING COMPLETENESS', NULL :: integer))
                         , ROW('notice config items creation/deletion'
-                                                            , mk_cpvalue_l('DISABLED'))
-                        , ROW('completeness check routines' , mk_cpvalue_l('ENABLED'))
+                                                            , mk_cpvalue_l('DISABLED', NULL :: integer))
+                        , ROW('completeness check routines' , mk_cpvalue_l('ENABLED', NULL :: integer))
+                        , ROW('autoadd languaged sub-/superconfigs'
+                                                            , mk_cpvalue_l('ENABLED', NULL :: integer))
                         ] :: t_paramvals__short[]
                 );
 
@@ -212,6 +229,22 @@ Possible values:
 ** "ENABLED"
 ** "DISABLED"
 This option simply regulates, if "confentity_domain_onmodify" trigger function is active.
+'
+                          )
+                       ] :: name_construction_input[]
+                )
+              , add_confparam_names(
+                  make_confentityparamkey_bystr2('Configuration management system setup', 'autoadd languaged sub-/superconfigs')
+                , ARRAY[ mk_name_construction_input(
+                            make_codekeyl_bystr('eng')     -- lng
+                          , 'autoadd languaged sub-/superconfigs' -- languaged name
+                          , make_codekeyl_null()           -- nameable entity (dont confuse with configurable entity) (NULL refers to default)
+                          ,                                -- description
+'Whenever entry in "configurations_bylngs" is added (or updated to), should the entries for sub-/superconfigs be automatically added too?
+Possible values:
+** "ENABLED"
+** "DISABLED"
+It is highly recommended to keep this option enabled, since completeness check may fail, just because absence of
 '
                           )
                        ] :: name_construction_input[]

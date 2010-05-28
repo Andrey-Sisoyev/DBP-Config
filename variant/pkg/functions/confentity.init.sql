@@ -24,15 +24,15 @@ CREATE OR REPLACE FUNCTION make_confentitykey(par_confentity_key t_code_key_by_l
 $$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION make_confentitykey_null() RETURNS t_confentity_key AS $$
-        SELECT ROW(make_codekeyl_null()) :: sch_<<$app_name$>>.t_confentity_key;
+        SELECT ROW(sch_<<$app_name$>>.make_codekeyl_null()) :: sch_<<$app_name$>>.t_confentity_key;
 $$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION make_confentitykey_bystr(par_confentity_str varchar) RETURNS t_confentity_key AS $$
-        SELECT ROW(make_codekeyl_bystr($1)) :: sch_<<$app_name$>>.t_confentity_key;
+        SELECT ROW(sch_<<$app_name$>>.make_codekeyl_bystr($1)) :: sch_<<$app_name$>>.t_confentity_key;
 $$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION make_confentitykey_byid(par_confentity_id integer) RETURNS t_confentity_key AS $$
-        SELECT ROW(make_codekeyl_byid($1)) :: sch_<<$app_name$>>.t_confentity_key;
+        SELECT ROW(sch_<<$app_name$>>.make_codekeyl_byid($1)) :: sch_<<$app_name$>>.t_confentity_key;
 $$ LANGUAGE SQL IMMUTABLE;
 
 --------------
@@ -63,7 +63,7 @@ $$ LANGUAGE SQL IMMUTABLE;
 CREATE OR REPLACE FUNCTION show_confentitykey(par_confentitykey t_confentity_key) RETURNS varchar AS $$
         SELECT '{t_confentity_key | '
             || ( CASE WHEN sch_<<$app_name$>>.confentity_is_null($1) THEN 'NULL'
-                      ELSE (  CASE WHEN ($1).confentity_codekeyl IS NULL THEN ''
+                      ELSE (  CASE WHEN sch_<<$app_name$>>.codekeyl_type(($1).confentity_codekeyl) = 'undef' THEN ''
                                    ELSE 'confentity_codekeyl: ' || sch_<<$app_name$>>.show_codekeyl(($1).confentity_codekeyl) || ';'
                               END
                            )
@@ -102,7 +102,6 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
         g sch_<<$app_name$>>.t_addressed_code_key_by_lng;
-        n sch_<<$app_name$>>.t_code_key_by_lng;
         r sch_<<$app_name$>>.t_confentity_key;
 
 BEGIN
@@ -116,8 +115,7 @@ BEGIN
               , 3 -- determination preference: code and language
               , 1 -- determination imperative: code
               );
-        n:= make_codekeyl(g.key_lng, g.code_key);
-        r:= make_confentitykey(n);
+        r:= make_confentitykey(make_codekeyl(g.key_lng, g.code_key));
 
         RETURN r;
 END;
@@ -186,6 +184,17 @@ BEGIN
                 , VARIADIC par_names
                 )
         INTO rows_count_add;
+
+        -- To read confentity names use this:
+        --
+        -- SELECT code_id
+        --      , lng_of_name
+        --      , name
+        --      , description
+        --      , entity
+        --      , comments
+        -- FROM codes_names
+        -- WHERE code_id = get_confentity_id(g.confentity_codekeyl);
 
         rows_count_accum:= rows_count_accum + rows_count_add;
 
@@ -265,6 +274,334 @@ BEGIN
         RETURN target_confentity_id;
 END;
 $$;
+
+--------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION clone_confentity(
+          par_confentity_key    t_confentity_key
+        , par_new_name          varchar
+        , par_clone_configs_too boolean
+        ) RETURNS integer
+SET search_path = sch_<<$app_name$>> -- , comn_funs, public
+LANGUAGE plpgsql STRICT
+AS $$
+DECLARE
+        new_confentity_id  integer;
+        orig_confentity_id integer;
+        orig_dflt_cfg      varchar;
+        rows_cnt           integer;
+        rows_cnt_add       integer;
+        cfg                configurations%ROWTYPE;
+        cfgl               configurations_bylngs%ROWTYPE;
+BEGIN
+        orig_confentity_id:= get_confentity_id(par_confentity_key);
+        new_confentity_id:= new_confentity(par_new_name, FALSE);
+        rows_cnt:= 1;
+
+        ---------------
+        INSERT INTO codes_names (
+                        code_id
+                      , lng_of_name
+                      , name
+                      , description
+                      , entity
+                      , comments
+                      )
+        SELECT new_confentity_id
+             , lng_of_name
+             , name
+             , description
+             , entity
+             , comments
+        FROM codes_names
+        WHERE code_id = orig_confentity_id;
+
+        GET DIAGNOSTICS rows_cnt_add = ROW_COUNT;
+        rows_cnt:= rows_cnt + rows_cnt_add;
+
+        ---------------
+        SELECT default_configuration_id INTO orig_dflt_cfg
+        FROM configurable_entities AS ce
+        WHERE confentity_code_id = orig_confentity_id;
+
+        INSERT INTO configurations(confentity_code_id, configuration_id, complete_isit, completeness_as_regulator)
+        VALUES (new_confentity_id, orig_dflt_cfg, 'li_chk_X', 'SET INCOMPLETE');
+        rows_cnt:= rows_cnt + 1;
+
+        GET DIAGNOSTICS rows_cnt_add = ROW_COUNT;
+        rows_cnt:= rows_cnt + rows_cnt_add;
+
+        UPDATE configurable_entities
+        SET default_configuration_id = orig_dflt_cfg
+        WHERE confentity_code_id = new_confentity_id;
+
+        ---------------
+        INSERT INTO configurations_parameters (
+                         confentity_code_id
+                       , parameter_id
+                       , parameter_type
+                       , constraints_array
+                       , allow_null_final_value
+                       , use_default_instead_of_null
+                       )
+        SELECT new_confentity_id
+             , parameter_id
+             , parameter_type
+             , constraints_array
+             , allow_null_final_value
+             , use_default_instead_of_null
+        FROM configurations_parameters
+        WHERE confentity_code_id = orig_confentity_id;
+
+        GET DIAGNOSTICS rows_cnt_add = ROW_COUNT;
+        rows_cnt:= rows_cnt + rows_cnt_add;
+
+        ---------------
+        INSERT INTO configurations_parameters_names (
+                        confentity_code_id
+                      , parameter_id
+                      , full_name
+                      , lng_of_name
+                      , description
+                      , comments
+                      )
+        SELECT new_confentity_id
+             , parameter_id
+             , name
+             , full_name
+             , lng_of_name
+             , description
+             , comments
+        FROM configurations_parameters_names
+        WHERE confentity_code_id = orig_confentity_id;
+
+        GET DIAGNOSTICS rows_cnt_add = ROW_COUNT;
+        rows_cnt:= rows_cnt + rows_cnt_add;
+
+        ---------------
+        INSERT INTO configurations_parameters__leafs (
+                        confentity_code_id
+                      , parameter_id
+                      , name
+                      , default_value
+                      , parameter_type
+                      , lnged_paramvalue_dflt_src
+                      )
+        SELECT new_confentity_id
+             , parameter_id
+             , default_value
+             , parameter_type
+             , lnged_paramvalue_dflt_src
+        FROM configurations_parameters__leafs
+        WHERE confentity_code_id = orig_confentity_id;
+
+        GET DIAGNOSTICS rows_cnt_add = ROW_COUNT;
+        rows_cnt:= rows_cnt + rows_cnt_add;
+
+        ---------------
+        INSERT INTO configurations(confentity_code_id, configuration_id, complete_isit, completeness_as_regulator)
+        SELECT new_confentity_id
+             , overload_default_subconfig
+             , 'li_chk_X'
+             , 'SET INCOMPLETE'
+        FROM configurations_parameters__subconfigs
+        WHERE overload_default_subconfig IS NOT NULL
+          AND confentity_code_id    = orig_confentity_id
+          AND subconfentity_code_id = orig_confentity_id;
+
+        GET DIAGNOSTICS rows_cnt_add = ROW_COUNT;
+        rows_cnt:= rows_cnt + rows_cnt_add;
+
+        ---------------
+        INSERT INTO configurations_parameters__subconfigs (
+                        confentity_code_id
+                      , parameter_id
+                      , subconfentity_code_id
+                      , overload_default_subconfig
+                      , overload_default_link
+                      , overload_default_link_usage
+                      , parameter_type
+                      )
+        SELECT new_confentity_id
+             , parameter_id
+             , subconfentity_code_id
+             , overload_default_subconfig
+             , overload_default_link
+             , overload_default_link_usage
+             , parameter_type
+        FROM configurations_parameters__subconfigs
+        WHERE confentity_code_id = orig_confentity_id;
+
+        GET DIAGNOSTICS rows_cnt_add = ROW_COUNT;
+        rows_cnt:= rows_cnt + rows_cnt_add;
+
+        ---------------
+        IF par_clone_configs_too THEN
+
+                ---------------
+                INSERT INTO configurations (confentity_code_id, configuration_id, complete_isit, completeness_as_regulator)
+                SELECT new_confentity_id
+                     , configuration_id
+                     , 'li_chk_X'
+                     , 'SET INCOMPLETE'
+                FROM configurations
+                WHERE confentity_code_id = orig_confentity_id
+                  AND ROW(new_confentity_id, configuration_id) NOT IN
+                                (SELECT nc.confentity_code_id, nc.configuration_id
+                                 FROM configurations AS nc
+                                 WHERE nc.confentity_code_id = new_confentity_id
+                                );
+
+                GET DIAGNOSTICS rows_cnt_add = ROW_COUNT;
+                rows_cnt:= rows_cnt + rows_cnt_add;
+
+                ---------------
+                INSERT INTO configurations_parameters_values__subconfigs (
+                                confentity_code_id
+                              , parameter_id
+                              , configuration_id
+                              , subconfentity_code_id
+                              , subconfiguration_id
+                              , subconfiguration_link
+                              , subconfiguration_link_usage
+                              )
+                SELECT new_confentity_id
+                     , parameter_id
+                     , configuration_id
+                     , subconfentity_code_id
+                     , subconfiguration_id
+                     , subconfiguration_link
+                     , subconfiguration_link_usage
+                FROM configurations_parameters_values__subconfigs
+                WHERE confentity_code_id = orig_confentity_id;
+
+                GET DIAGNOSTICS rows_cnt_add = ROW_COUNT;
+                rows_cnt:= rows_cnt + rows_cnt_add;
+
+                ---------------
+                INSERT INTO configurations_parameters_values__leafs (
+                                confentity_code_id
+                              , parameter_id
+                              , configuration_id
+                              , value
+                              )
+                SELECT new_confentity_id
+                     , parameter_id
+                     , configuration_id
+                     , value
+                FROM configurations_parameters_values__leafs
+                WHERE confentity_code_id = orig_confentity_id;
+
+                GET DIAGNOSTICS rows_cnt_add = ROW_COUNT;
+                rows_cnt:= rows_cnt + rows_cnt_add;
+
+                ---------------
+                INSERT INTO configurations_bylngs (
+                                confentity_code_id
+                              , configuration_id
+                              , values_lng_code_id
+                              , complete_isit
+                              , completeness_as_regulator
+                              )
+                SELECT new_confentity_id
+                     , configuration_id
+                     , values_lng_code_id
+                     , 'li_chk_X'
+                     , 'SET INCOMPLETE'
+                FROM configurations_bylngs
+                WHERE confentity_code_id = orig_confentity_id;
+
+                GET DIAGNOSTICS rows_cnt_add = ROW_COUNT;
+                rows_cnt:= rows_cnt + rows_cnt_add;
+
+                ---------------
+                INSERT INTO configurations_parameters_lngvalues__leafs (
+                                confentity_code_id
+                              , parameter_id
+                              , value_lng_code_id
+                              , configuration_id
+                              , value
+                              )
+                SELECT new_confentity_id
+                     , parameter_id
+                     , value_lng_code_id
+                     , configuration_id
+                     , value
+                FROM configurations_parameters_lngvalues__leafs
+                WHERE confentity_code_id = orig_confentity_id;
+
+                GET DIAGNOSTICS rows_cnt_add = ROW_COUNT;
+                rows_cnt:= rows_cnt + rows_cnt_add;
+
+                ---------------
+                FOR cfgl IN SELECT oc.*
+                            FROM configurations_bylngs AS oc
+                               , configurations_bylngs AS nc
+                            WHERE oc.configuration_id   = nc.configuration_id
+                              AND oc.values_lng_code_id = nc.values_lng_code_id
+                              AND oc.confentity_code_id = orig_confentity_id
+                              AND nc.confentity_code_id =  new_confentity_id
+                LOOP
+                        UPDATE configurations_bylngs
+                        SET completeness_as_regulator = cfgl.completeness_as_regulator
+                          , complete_isit             = cfgl.complete_isit
+                        WHERE confentity_code_id = new_confentity_id
+                          AND configuration_id   = cfgl.configuration_id
+                          AND values_lng_code_id = cfgl.values_lng_code_id;
+                END LOOP;
+        END IF;
+
+        ---------------
+        FOR cfg IN SELECT oc.*
+                   FROM configurations AS oc
+                      , configurations AS nc
+                   WHERE oc.configuration_id = nc.configuration_id
+                     AND oc.confentity_code_id = orig_confentity_id
+                     AND nc.confentity_code_id =  new_confentity_id
+        LOOP
+                UPDATE configurations
+                SET completeness_as_regulator = cfg.completeness_as_regulator
+                  , complete_isit = CASE par_clone_configs_too WHEN TRUE THEN cfg.complete_isit ELSE complete_isit END
+                WHERE confentity_code_id = new_confentity_id
+                  AND configuration_id = cfg.configuration_id;
+
+                ---------------
+                INSERT INTO configurations_names (
+                                confentity_code_id
+                              , configuration_id
+                              , name
+                              , lng_of_name
+                              , description
+                              , comments
+                              )
+                SELECT new_confentity_id
+                     , cfg.configuration_id
+                     , name
+                     , lng_of_name
+                     , description
+                     , comments
+                FROM configurations_names
+                WHERE confentity_code_id = orig_confentity_id
+                  AND configuration_id = cfg.configuration_id;
+
+                rows_cnt:= rows_cnt + 1;
+
+        END LOOP;
+
+        RETURN new_confentity_id;
+END;
+$$;
+
+COMMENT ON FUNCTION clone_confentity(
+          par_confentity_key    t_confentity_key
+        , par_new_name          varchar
+        , par_clone_configs_too boolean
+        ) IS '
+Creates a copy of configurable entity. With all languaged names-descriptions.
+If "par_clone_configs_too" is FALSE, then only those configs are created, that are referenced by confentity default and self-subconfentities defaults. Configs languaged names are copied too, BUT no values are copied, no languaged configs are copied, completeness is set to "li_chk_X".
+If it''s TRUE, then all configs with values (also languaged values) get copied. Configurations'' completenss statuses also get copied.
+';
+
 
 ------------------------------
 
@@ -369,6 +706,7 @@ BEGIN
                                         g
                                       , c.configuration_id
                                       , FALSE
+                                      , make_codekeyl_null()
                                       )
                               , par_cascade_setnull_ce_dflt
                               , par_cascade_setnull_param_dflt
@@ -565,6 +903,11 @@ GRANT EXECUTE ON FUNCTION new_confentity(
         , par_ifdoesnt_exist boolean
         , par_lng_names      name_construction_input[]
         ) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
+GRANT EXECUTE ON FUNCTION clone_confentity(
+          par_confentity_key    t_confentity_key
+        , par_new_name          varchar
+        , par_clone_configs_too boolean
+        )  TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin;
 GRANT EXECUTE ON FUNCTION delete_confentity(
                   par_ifexists                           boolean
                 , par_confentity_key                     t_confentity_key

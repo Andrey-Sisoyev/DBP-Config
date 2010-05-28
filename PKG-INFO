@@ -16,7 +16,7 @@ Description:
       The code optimizations will be considered in further versions.
       Also, cycles are restricted in relations of type superconfig-subconfig.
       Enabling cycles support will be considered in further versions.
-Version: 0.2
+Version: 0.3
 License: BSD3
 Copyright: Copyright (c) 2010 Andrejs Sisojevs
 License-File: COPYING
@@ -26,6 +26,6 @@ Stability: beta
 Homepage: http://github.com/Andrey-Sisoyev/DBP-Config
 Category: Database
 Tested-With: ArchLinux, PostgreSQL v8.4
-Depends-On: Codifier >= 0.5.4
+Depends-On: Codifier >= 0.7.0
 Manual-file: HOWTO
 Safe-to-test-with-user-data: FALSE

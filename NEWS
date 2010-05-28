@@ -8,3 +8,90 @@ Changes from 0.1 to 0.2
 * Migrated on Standard v0.3 (from v0.2) 
 * Migrated on DBP-tpl template v0.4 (from v0.3). Some code reorganization. 
 * Got rid of enter_schema_namespace() and added some IMMUTABLE hints.
+
+
+Changes from 0.2 to 0.3
+--------------------------------------------
+* Redrawn ERD after f sick crash of OODraw styles... 
+* Migrated to new version of DBP-tpl - now v0.5 is in the base.
+* Added "USING INDEX TABLESPACE tabsp_<<$db_name$>>_<<$app_name$>>_idxs" 
+  to PRIMARY KEYs definitions.
+* Configuration parameter (languaged) name now has additional field:
+     full_name :: varchar DEFAULT NULL
+  The field is just informative - one can not address parameter by this name.
+* Values of configuration parameters-leafs now may be of different languages.
+     ++ Additional table for languaged configurations: 
+          +++ TABLE configurations_bylngs
+        It has all same fields as a "configurations" does, but with 
+        an additional attribute (being part of the PRIMARY KEY):
+          +++ values_lng_code_id :: integer NOT NULL 
+                                         REFERENCES languages(code_id)
+                                                ON DELETE RESTRICT 
+                                                ON UPDATE CASCADE
+        This table references "configurations" PRIMARY KEY.
+     ++ Additional table for languaged values: 
+          +++ "configurations_parameters_lngvalues__leafs"
+        It has all same fields as a "configurations_parameters_values__leafs" 
+        does, with an additional attribute (being part of the PRIMARY KEY):
+          +++ value_lng_code_id :: boolean DEFAULT NULL
+                                        REFERENCES languages(code_id)
+                                                ON DELETE RESTRICT 
+                                                ON UPDATE CASCADE
+        This table references "configurations_bylngs" PRIMARY KEY, 
+        and references "configurations_parameters_values__leafs" PRIMARY KEY.
+     ++ Table "configurations_parameters__leafs" now has additional field:
+          +++ lnged_paramvalue_dflt_src :: t_lnged_paramvalue_dflt_src NOT NULL
+        This controls the default value choice for languaged confparameter 
+        value, when it is NULL or is absent 
+        in "configurations_parameters_lngvalues__leafs". It may be 
+          +++ "use NULL"
+          +++ "use nonlanguaged value"
+          +++ "use parameter default"
+          +++ "use parameter default if nonlanguaged value is NULL"
+     ++ Some attributes related with languaged values are introduced in some types:
+          +++ Config key (TYPE "t_config_key") now includes attribute for language 
+              of values:
+                ++++ config_lng :: t_code_key_by_lng
+              If NULL, then nonlanguaged values are considered 
+              from table "configurations_parameters_values__leafs", 
+              otherwise - from table "configurations_parameters_lngvalues__leafs".
+          +++ Config parameter descriptor (TYPE "t_cparameter_uni") now includes 
+              attribute for specifying method of determination of default 
+              languaged value:
+                ++++ lnged_paramvalue_dflt_src :: t_lnged_paramvalue_dflt_src 
+              This is applicable only for values of type "leaf".
+          +++ Config parameter value descriptor (TYPE "t_cpvalue_uni") now includes 
+              attribute for language of value:
+                ++++ lng_code_id :: integer 
+              This is applicable only for values of type "leaf".
+              If NULL, then nonlanguaged value is considered 
+              from table "configurations_parameters_values__leafs", 
+              otherwise - from table "configurations_parameters_lngvalues__leafs".
+     ++ Added mechanism that automatically adds languaged super-/subconfigs, 
+        if they don't exit, triggered by addition of languaged config 
+        in "configurations_bylngs" table by INSERT or 
+        UPDATE operation. 
+        F.e., config C5 has superconfigs C3 and C4, subconfigs C6, C7. Create new 
+        language L. Add languaged by L config for C5 in 
+        table "configurations_bylngs". Trigger shots and creates languaged by L 
+        configs also for C3, C4, C6 and C7.
+        This is a convenience feature. And it may be enabled/disabled (enabled 
+        by default) using configuration parameter 
+          +++ "autoadd languaged sub-/superconfigs" 
+        in configurable entity "Configuration management system setup".
+     ++ Function "clone_config" now clones also 
+          +++ languaged config instances
+* Function "clone_config" now clones also 
+          +++ languaged config names
+* New function:
+     ++ clone_confentity(
+          par_confentity_key    t_confentity_key
+        , par_new_name          varchar
+        , par_clone_configs_too boolean
+        ) RETURNS integer
+* Explicated issues: 
+     -- Probably too many indexes. This makes INSERT/DELETE operations slow.
+     -- Language plpgsql is bad for imperatives programming style. 
+        Too slow with cycles. 
+        It rather recreates variable, then modifies it, when I do "i:= i + 1;"
+        Will have to remake plpgsql procedures.

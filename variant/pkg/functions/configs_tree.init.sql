@@ -119,19 +119,20 @@ SET search_path = sch_<<$app_name$>> -- , comn_funs, public
 LANGUAGE plpgsql IMMUTABLE
 AS $$
 DECLARE i integer; l integer; target_ce_id integer; target_cfg_id varchar; target_lnged_isit boolean; continue_ boolean;
+        target_cfg_lng integer;
 BEGIN   target_ce_id := sch_<<$app_name$>>.code_id_of_confentitykey(par_configkey.confentity_key);
         target_cfg_id:= par_configkey.config_id;
         target_lnged_isit:= par_configkey.cfgid_is_lnged;
-        l:= array_length(par_config_list, 1); i:= 0;
-        continue_:= TRUE;
-        WHILE (i < l) AND continue_ LOOP
-            i:= i + 1;
-            continue_:= (sch_<<$app_name$>>.code_id_of_confentitykey((par_config_list[i]).confentity_key) IS DISTINCT FROM target_ce_id)
-                     OR ((par_config_list[i]).config_id      IS DISTINCT FROM target_cfg_id)
-                     OR ((par_config_list[i]).cfgid_is_lnged IS DISTINCT FROM target_lnged_isit);
-        END LOOP;
+        target_cfg_lng:= ((par_configkey.config_lng).code_key).code_id;
 
-        IF continue_ THEN i:= NULL :: integer; END IF;
+        SELECT s INTO i
+        FROM generate_series(array_lower(par_config_list, 1),array_upper(par_config_list, 1)) AS s
+        WHERE code_id_of_confentitykey((par_config_list[s]).confentity_key) IS NOT DISTINCT FROM target_ce_id
+          AND ((par_config_list[s]).config_id      IS NOT DISTINCT FROM target_cfg_id)
+          AND ((par_config_list[s]).cfgid_is_lnged IS NOT DISTINCT FROM target_lnged_isit)
+          AND ((((par_config_list[s]).config_lng).code_key).code_id IS NOT DISTINCT FROM target_cfg_lng)
+        LIMIT 1;
+
         RETURN i;
 END;
 $$;
@@ -198,26 +199,138 @@ DECLARE
         target_cfg_id   varchar;
         target_complete t_config_completeness_check_result;
 BEGIN
-        target_ce_id   := par_config_tree_entry.sub_ce_id;
-        target_cfg_id  := par_config_tree_entry.sub_cfg_id;
-        target_complete:= par_config_tree_entry.sub_complete;
-        IF target_ce_id IS NULL OR target_cfg_id IS NULL THEN
-                target_ce_id   := par_config_tree_entry.super_ce_id;
-                target_cfg_id  := par_config_tree_entry.super_cfg_id;
-                target_complete:= par_config_tree_entry.super_complete;
-        END IF;
+    target_ce_id   := par_config_tree_entry.sub_ce_id;
+    target_cfg_id  := par_config_tree_entry.sub_cfg_id;
+    target_complete:= par_config_tree_entry.sub_complete;
+    IF target_ce_id IS NULL OR target_cfg_id IS NULL THEN
+        target_ce_id   := par_config_tree_entry.super_ce_id;
+        target_cfg_id  := par_config_tree_entry.super_cfg_id;
+        target_complete:= par_config_tree_entry.super_complete;
+    END IF;
 
-        IF target_ce_id IS NULL OR target_cfg_id IS NULL THEN
-                RAISE EXCEPTION 'No config to start search from in the parameter: %.', par_config_tree_entry;
-        END IF;
+    IF target_ce_id IS NULL OR target_cfg_id IS NULL THEN
+        RAISE EXCEPTION 'No config to start search from in the parameter: %.', par_config_tree_entry;
+    END IF;
 
-        g:= make_configkey_bystr(target_ce_id, target_cfg_id);
-        cfgs_rope:= ARRAY[g] || par_config_tree_entry.path;
+    g:= make_configkey(make_confentitykey_byid(target_ce_id), target_cfg_id, FALSE, make_codekeyl_null());
+    cfgs_rope:= ARRAY[g] || par_config_tree_entry.path;
 
-        cur_layer_cfgs:= ARRAY[] :: t_configs_tree_rel[]; -- := ARRAY[par_config_tree_entry]
+    cur_layer_cfgs:= ARRAY[] :: t_configs_tree_rel[]; -- := ARRAY[par_config_tree_entry]
 
-        -- by value
-        IF 'p_val' IN (SELECT * FROM unnest(par_value_source_types) AS z) THEN
+    -- by value
+    IF 'p_val' IN (SELECT * FROM unnest(par_value_source_types) AS z) THEN
+        cur_layer_cfgs:= cur_layer_cfgs || ARRAY(
+                SELECT mk_configs_tree_rel(
+                                cpv_s.confentity_code_id
+                              , cpv_s.configuration_id
+                              , cpv_s.parameter_id
+                              , target_ce_id
+                              , target_cfg_id
+                              , 'p_val' :: t_cfg_tree_rel_type
+                              , cfgs_rope
+                              , par_config_tree_entry.depth - 1
+                              , cfg_idx_in_list(make_configkey(make_confentitykey_byid(cpv_s.confentity_code_id), cpv_s.configuration_id, FALSE, make_codekeyl_null()), cfgs_rope) IS NOT NULL
+                              , cpv_s.complete_isit
+                              , target_complete
+                              )
+                FROM (((configurations AS c
+                           INNER JOIN
+                        configurations_parameters AS cp_
+                           USING (confentity_code_id)
+                       ) AS cp_
+                          INNER JOIN
+                       configurations_parameters__subconfigs AS cp_s_
+                          USING (confentity_code_id, parameter_id)
+                      ) AS cp_s
+                         INNER JOIN
+                      configurations_parameters_values__subconfigs AS cpv_s_
+                          USING (confentity_code_id, parameter_id, subconfentity_code_id, configuration_id)
+                     ) AS cpv_s
+                WHERE cpv_s.subconfentity_code_id = target_ce_id
+                  AND cpv_s.subconfiguration_id IS NOT DISTINCT FROM target_cfg_id
+                  AND cpv_s.subconfiguration_link_usage != 'alw_onl_lnk'
+        );
+    END IF;
+
+    -- by parameter default
+    IF 'p_dflt_val' IN (SELECT * FROM unnest(par_value_source_types) AS z) THEN
+        cur_layer_cfgs:= cur_layer_cfgs || ARRAY(
+                SELECT mk_configs_tree_rel(
+                                cpv_s.confentity_code_id
+                              , cpv_s.configuration_id
+                              , cpv_s.parameter_id
+                              , target_ce_id
+                              , target_cfg_id
+                              , 'p_dflt_val' :: t_cfg_tree_rel_type
+                              , cfgs_rope
+                              , par_config_tree_entry.depth - 1
+                              , cfg_idx_in_list(make_configkey(make_confentitykey_byid(cpv_s.confentity_code_id), cpv_s.configuration_id, FALSE, make_codekeyl_null()), cfgs_rope) IS NOT NULL
+                              , cpv_s.complete_isit
+                              , target_complete
+                              )
+                FROM (((configurations AS c
+                           INNER JOIN
+                        configurations_parameters AS cp_
+                           USING (confentity_code_id)
+                       ) AS cp
+                          INNER JOIN
+                       configurations_parameters__subconfigs AS cp_s_
+                          USING (confentity_code_id, parameter_id, parameter_type)
+                      ) AS cp_s
+                         LEFT OUTER JOIN
+                      configurations_parameters_values__subconfigs AS cpv_s_
+                          USING (confentity_code_id, parameter_id, configuration_id, subconfentity_code_id)
+                     ) AS cpv_s
+                WHERE CASE (    cpv_s.subconfentity_code_id      = target_ce_id
+                           AND cpv_s.overload_default_subconfig = target_cfg_id
+                           AND cpv_s.use_default_instead_of_null IN ('par_d', 'par_d_sce_d')
+                           AND cpv_s.overload_default_link_usage != 'alw_onl_lnk'
+                           )
+                         WHEN FALSE THEN FALSE
+                         ELSE CASE cpv_s.subconfiguration_link_usage IS NULL
+                                  WHEN TRUE THEN TRUE
+                                  ELSE CASE cpv_s.subconfiguration_link_usage
+                                           WHEN 'no_lnk'        THEN
+                                               cpv_s.subconfiguration_id   IS NULL
+                                           WHEN 'alw_onl_lnk'   THEN
+                                               (  cpv_s.subconfiguration_link IS NULL
+                                               OR cparameter_finval_persists(
+                                                    determine_finvalue_by_cop(
+                                                        TRUE
+                                                      , make_configparamkey(
+                                                                        make_configkey(make_confentitykey_byid(cpv_s.confentity_code_id), cpv_s.configuration_id, FALSE, make_codekeyl_null())
+                                                                      , cpv_s.parameter_id
+                                                                      , FALSE
+                                                                      )
+                                                      )
+                                                  , 'cp_dflt'
+                                                  )
+                                               ) -- this complexity occurs to be necessary, because we can't know, if final value of referenced parameter is NULL
+                                           WHEN 'whn_vnull_lnk' THEN
+                                               (   cpv_s.subconfiguration_id   IS NULL
+                                               AND (  cpv_s.subconfiguration_link IS NULL
+                                                   OR cparameter_finval_persists(
+                                                        determine_finvalue_by_cop(
+                                                            TRUE
+                                                          , make_configparamkey(
+                                                                            make_configkey(make_confentitykey_byid(cpv_s.confentity_code_id), cpv_s.configuration_id, FALSE, make_codekeyl_null())
+                                                                          , cpv_s.parameter_id
+                                                                          , FALSE
+                                                                          )
+                                                          )
+                                                      , 'cp_dflt'
+                                                      )
+                                                   )
+                                               )
+                                       END
+                              END
+                      END
+        );
+    END IF;
+
+    -- by confentity default
+    IF 'ce_dflt' IN (SELECT * FROM unnest(par_value_source_types) AS z) THEN
+        IF is_confentity_default(g) THEN
                 cur_layer_cfgs:= cur_layer_cfgs || ARRAY(
                         SELECT mk_configs_tree_rel(
                                         cpv_s.confentity_code_id
@@ -225,45 +338,10 @@ BEGIN
                                       , cpv_s.parameter_id
                                       , target_ce_id
                                       , target_cfg_id
-                                      , 'p_val' :: t_cfg_tree_rel_type
+                                      , 'ce_dflt' :: t_cfg_tree_rel_type
                                       , cfgs_rope
                                       , par_config_tree_entry.depth - 1
-                                      , cfg_idx_in_list(make_configkey_bystr(cpv_s.confentity_code_id, cpv_s.configuration_id), cfgs_rope) IS NOT NULL
-                                      , cpv_s.complete_isit
-                                      , target_complete
-                                      )
-                        FROM (((configurations AS c
-                                   INNER JOIN
-                                configurations_parameters AS cp_
-                                   USING (confentity_code_id)
-                               ) AS cp_
-                                  INNER JOIN
-                               configurations_parameters__subconfigs AS cp_s_
-                                  USING (confentity_code_id, parameter_id)
-                              ) AS cp_s
-                                 INNER JOIN
-                              configurations_parameters_values__subconfigs AS cpv_s_
-                                  USING (confentity_code_id, parameter_id, subconfentity_code_id, configuration_id)
-                             ) AS cpv_s
-                        WHERE cpv_s.subconfentity_code_id = target_ce_id
-                          AND cpv_s.subconfiguration_id IS NOT DISTINCT FROM target_cfg_id
-                          AND cpv_s.subconfiguration_link_usage != 'alw_onl_lnk'
-                );
-        END IF;
-
-        -- by parameter default
-        IF 'p_dflt_val' IN (SELECT * FROM unnest(par_value_source_types) AS z) THEN
-                cur_layer_cfgs:= cur_layer_cfgs || ARRAY(
-                        SELECT mk_configs_tree_rel(
-                                        cpv_s.confentity_code_id
-                                      , cpv_s.configuration_id
-                                      , cpv_s.parameter_id
-                                      , target_ce_id
-                                      , target_cfg_id
-                                      , 'p_dflt_val' :: t_cfg_tree_rel_type
-                                      , cfgs_rope
-                                      , par_config_tree_entry.depth - 1
-                                      , cfg_idx_in_list(make_configkey_bystr(cpv_s.confentity_code_id, cpv_s.configuration_id), cfgs_rope) IS NOT NULL
+                                      , cfg_idx_in_list(make_configkey(make_confentitykey_byid(cpv_s.confentity_code_id), cpv_s.configuration_id, FALSE, make_codekeyl_null()), cfgs_rope) IS NOT NULL
                                       , cpv_s.complete_isit
                                       , target_complete
                                       )
@@ -272,7 +350,7 @@ BEGIN
                                 configurations_parameters AS cp_
                                    USING (confentity_code_id)
                                ) AS cp
-                                  INNER JOIN
+                                  INNER JOIN -- not "left outer", because subconfentity_code_id is needed
                                configurations_parameters__subconfigs AS cp_s_
                                   USING (confentity_code_id, parameter_id, parameter_type)
                               ) AS cp_s
@@ -280,100 +358,48 @@ BEGIN
                               configurations_parameters_values__subconfigs AS cpv_s_
                                   USING (confentity_code_id, parameter_id, configuration_id, subconfentity_code_id)
                              ) AS cpv_s
-                        WHERE CASE (    cpv_s.subconfentity_code_id      = target_ce_id
-                                   AND cpv_s.overload_default_subconfig = target_cfg_id
-                                   AND cpv_s.use_default_instead_of_null IN ('par_d', 'par_d_sce_d')
-                                   AND cpv_s.overload_default_link_usage != 'alw_onl_lnk'
+                        WHERE CASE (   cpv_s.subconfentity_code_id = target_ce_id
+                                   AND cpv_s.use_default_instead_of_null IN ('sce_d', 'par_d_sce_d')
                                    )
-                                 WHEN FALSE THEN FALSE
-                                 ELSE CASE cpv_s.subconfiguration_link_usage IS NULL
-                                          WHEN TRUE THEN TRUE
-                                          ELSE CASE cpv_s.subconfiguration_link_usage
-                                                   WHEN 'no_lnk'        THEN
-                                                       cpv_s.subconfiguration_id   IS NULL
-                                                   WHEN 'alw_onl_lnk'   THEN
-                                                       (  cpv_s.subconfiguration_link IS NULL
-                                                       OR cparameter_finval_persists(
-                                                            determine_finvalue_by_cop(
-                                                                TRUE
-                                                              , make_configparamkey(
-                                                                                make_configkey_bystr(cpv_s.confentity_code_id, cpv_s.configuration_id)
-                                                                              , cpv_s.parameter_id
-                                                                              , FALSE
-                                                                              )
-                                                              )
-                                                          , 'cp_dflt'
-                                                          )
-                                                       ) -- this complexity occurs to be necessary, because we can't know, if final value of referenced parameter is NULL
-                                                   WHEN 'whn_vnull_lnk' THEN
-                                                       (   cpv_s.subconfiguration_id   IS NULL
-                                                       AND (  cpv_s.subconfiguration_link IS NULL
-                                                           OR cparameter_finval_persists(
-                                                                determine_finvalue_by_cop(
-                                                                    TRUE
-                                                                  , make_configparamkey(
-                                                                                    make_configkey_bystr(cpv_s.confentity_code_id, cpv_s.configuration_id)
-                                                                                  , cpv_s.parameter_id
-                                                                                  , FALSE
-                                                                                  )
-                                                                  )
-                                                              , 'cp_dflt'
-                                                              )
-                                                           )
-                                                       )
-                                               END
-                                      END
-                              END
-                );
-        END IF;
+                                  WHEN FALSE THEN FALSE
+                                  ELSE
+                                      CASE ( CASE cpv_s.subconfiguration_link_usage IS NULL
+                                                 WHEN TRUE THEN 0
+                                                 ELSE CASE cpv_s.subconfiguration_link_usage
+                                                          WHEN 'no_lnk'        THEN
+                                                              ((cpv_s.subconfiguration_id   IS NOT NULL) :: integer)
+                                                          WHEN 'alw_onl_lnk'   THEN
+                                                              ((cpv_s.subconfiguration_link IS NOT NULL) :: integer * 10)
 
-        -- by confentity default
-        IF 'ce_dflt' IN (SELECT * FROM unnest(par_value_source_types) AS z) THEN
-                IF is_confentity_default(g) THEN
-                        cur_layer_cfgs:= cur_layer_cfgs || ARRAY(
-                                SELECT mk_configs_tree_rel(
-                                                cpv_s.confentity_code_id
-                                              , cpv_s.configuration_id
-                                              , cpv_s.parameter_id
-                                              , target_ce_id
-                                              , target_cfg_id
-                                              , 'ce_dflt' :: t_cfg_tree_rel_type
-                                              , cfgs_rope
-                                              , par_config_tree_entry.depth - 1
-                                              , cfg_idx_in_list(make_configkey_bystr(cpv_s.confentity_code_id, cpv_s.configuration_id), cfgs_rope) IS NOT NULL
-                                              , cpv_s.complete_isit
-                                              , target_complete
-                                              )
-                                FROM (((configurations AS c
-                                           INNER JOIN
-                                        configurations_parameters AS cp_
-                                           USING (confentity_code_id)
-                                       ) AS cp
-                                          INNER JOIN -- not "left outer", because subconfentity_code_id is needed
-                                       configurations_parameters__subconfigs AS cp_s_
-                                          USING (confentity_code_id, parameter_id, parameter_type)
-                                      ) AS cp_s
-                                         LEFT OUTER JOIN
-                                      configurations_parameters_values__subconfigs AS cpv_s_
-                                          USING (confentity_code_id, parameter_id, configuration_id, subconfentity_code_id)
-                                     ) AS cpv_s
-                                WHERE CASE (   cpv_s.subconfentity_code_id = target_ce_id
-                                           AND cpv_s.use_default_instead_of_null IN ('sce_d', 'par_d_sce_d')
+                                                          WHEN 'whn_vnull_lnk' THEN
+                                                              ((cpv_s.subconfiguration_id   IS NOT NULL) :: integer) +
+                                                              ((cpv_s.subconfiguration_link IS NOT NULL) :: integer * 10)
+                                                      END
+                                             END
                                            )
-                                          WHEN FALSE THEN FALSE
-                                          ELSE
-                                              CASE ( CASE cpv_s.subconfiguration_link_usage IS NULL
-                                                         WHEN TRUE THEN 0
-                                                         ELSE CASE cpv_s.subconfiguration_link_usage
-                                                                  WHEN 'no_lnk'        THEN
-                                                                      ((cpv_s.subconfiguration_id   IS NOT NULL) :: integer)
-                                                                  WHEN 'alw_onl_lnk'   THEN
-                                                                      ((cpv_s.subconfiguration_link IS NOT NULL) :: integer * 10)
-
-                                                                  WHEN 'whn_vnull_lnk' THEN
-                                                                      ((cpv_s.subconfiguration_id   IS NOT NULL) :: integer) +
-                                                                      ((cpv_s.subconfiguration_link IS NOT NULL) :: integer * 10)
-                                                              END
+                                          WHEN  1 THEN FALSE
+                                          WHEN 11 THEN FALSE
+                                          WHEN 10 THEN
+                                              cparameter_finval_persists(
+                                                determine_finvalue_by_cop(
+                                                    TRUE
+                                                  , make_configparamkey(
+                                                                    make_configkey(make_confentitykey_byid(cpv_s.confentity_code_id), cpv_s.configuration_id, FALSE, make_codekeyl_null())
+                                                                  , cpv_s.parameter_id
+                                                                  , FALSE
+                                                                  )
+                                                  )
+                                              , 'ce_dflt'
+                                              )
+                                          WHEN  0 THEN
+                                              CASE ( CASE cpv_s.overload_default_link_usage
+                                                         WHEN 'no_lnk'        THEN
+                                                             ((cpv_s.overload_default_subconfig IS NOT NULL) :: integer)
+                                                         WHEN 'alw_onl_lnk'   THEN
+                                                             ((cpv_s.overload_default_link      IS NOT NULL) :: integer * 10)
+                                                         WHEN 'whn_vnull_lnk' THEN
+                                                             ((cpv_s.overload_default_subconfig IS NOT NULL) :: integer) +
+                                                             ((cpv_s.overload_default_link      IS NOT NULL) :: integer * 10)
                                                      END
                                                    )
                                                   WHEN  1 THEN FALSE
@@ -383,52 +409,26 @@ BEGIN
                                                         determine_finvalue_by_cop(
                                                             TRUE
                                                           , make_configparamkey(
-                                                                            make_configkey_bystr(cpv_s.confentity_code_id, cpv_s.configuration_id)
+                                                                            make_configkey(make_confentitykey_byid(cpv_s.confentity_code_id), cpv_s.configuration_id, FALSE, make_codekeyl_null())
                                                                           , cpv_s.parameter_id
                                                                           , FALSE
                                                                           )
                                                           )
                                                       , 'ce_dflt'
                                                       )
-                                                  WHEN  0 THEN
-                                                      CASE ( CASE cpv_s.overload_default_link_usage
-                                                                 WHEN 'no_lnk'        THEN
-                                                                     ((cpv_s.overload_default_subconfig IS NOT NULL) :: integer)
-                                                                 WHEN 'alw_onl_lnk'   THEN
-                                                                     ((cpv_s.overload_default_link      IS NOT NULL) :: integer * 10)
-                                                                 WHEN 'whn_vnull_lnk' THEN
-                                                                     ((cpv_s.overload_default_subconfig IS NOT NULL) :: integer) +
-                                                                     ((cpv_s.overload_default_link      IS NOT NULL) :: integer * 10)
-                                                             END
-                                                           )
-                                                          WHEN  1 THEN FALSE
-                                                          WHEN 11 THEN FALSE
-                                                          WHEN 10 THEN
-                                                              cparameter_finval_persists(
-                                                                determine_finvalue_by_cop(
-                                                                    TRUE
-                                                                  , make_configparamkey(
-                                                                                    make_configkey_bystr(cpv_s.confentity_code_id, cpv_s.configuration_id)
-                                                                                  , cpv_s.parameter_id
-                                                                                  , FALSE
-                                                                                  )
-                                                                  )
-                                                              , 'ce_dflt'
-                                                              )
-                                                          WHEN  0 THEN TRUE
-                                                      END
+                                                  WHEN  0 THEN TRUE
                                               END
                                       END
-                        );
-                END IF;
+                              END
+                );
         END IF;
+    END IF;
 
-        cur_layer_cfgs:= cur_layer_cfgs || subconfigparams_lnks_extraction(
-                cur_layer_cfgs
-              , par_value_source_types
-              );
-
-        RETURN cur_layer_cfgs;
+    cur_layer_cfgs:= cur_layer_cfgs || subconfigparams_lnks_extraction(
+                                                cur_layer_cfgs
+                                              , par_value_source_types
+                                              );
+    RETURN cur_layer_cfgs;
 END;
 $$;
 
@@ -477,12 +477,12 @@ BEGIN
                 RAISE EXCEPTION 'No config to start search from in the parameter: %.', par_config_tree_entry;
         END IF;
 
-        g:= make_configkey_bystr(target_ce_id, target_cfg_id);
+        g:= make_configkey(make_confentitykey_byid(target_ce_id), target_cfg_id, FALSE, make_codekeyl_null());
         cfgs_rope:= par_config_tree_entry.path || ARRAY[g];
 
         cur_layer_cfgs:= ARRAY[] :: t_configs_tree_rel[]; -- := ARRAY[par_config_tree_entry]
 
-        ps:= get_paramvalues(TRUE,g);
+        ps:= get_paramvalues(TRUE, g);
         l:= array_length(ps, 1);
         i:= 0;
         WHILE i < l LOOP
@@ -504,7 +504,7 @@ BEGIN
                               , ct_rel_type
                               , cfgs_rope
                               , par_config_tree_entry.depth + 1
-                              , cfg_idx_in_list(make_configkey_bystr(sub_ce_id, sub_cfg_id), cfgs_rope) IS NOT NULL
+                              , cfg_idx_in_list(make_configkey(make_confentitykey_byid(sub_ce_id), sub_cfg_id, FALSE, make_codekeyl_null()), cfgs_rope) IS NOT NULL
                               , target_complete
                               , sub_complete
                               );
@@ -684,7 +684,7 @@ BEGIN
                                                  FROM (SELECT determine_finvalue_by_cop(
                                                                 TRUE
                                                               , make_configparamkey(
-                                                                                make_configkey_bystr(ct.super_ce_id, ct.super_cfg_id)
+                                                                                make_configkey(make_confentitykey_byid(ct.super_ce_id), ct.super_cfg_id, FALSE, make_codekeyl_null())
                                                                               , cpv_s.parameter_id
                                                                               , FALSE
                                                                               )
@@ -760,6 +760,7 @@ DECLARE
         rez_len integer;
         add_ct sch_<<$app_name$>>.t_configs_tree_rel;
         ex_ct sch_<<$app_name$>>.t_configs_tree_rel;
+        cfg t_config_key;
 
         depth_changed_for     sch_<<$app_name$>>.t_configs_tree_rel[];
         depth_changed_for_new sch_<<$app_name$>>.t_configs_tree_rel[];
@@ -897,9 +898,10 @@ BEGIN
                                               AND v.sub_cfg_id = u.super_cfg_id
                                               AND (v.depth + 1 > u.depth)
                                             THEN
-                                                idx:= cfg_idx_in_list(make_configkey_bystr(u.sub_ce_id, u.sub_cfg_id), v.path);
+                                                cfg:= make_configkey(make_confentitykey_byid(u.sub_ce_id), u.sub_cfg_id, FALSE, make_codekeyl_null());
+                                                idx:= cfg_idx_in_list(cfg, v.path);
                                                 IF idx IS NULL OR u.cycle_detected THEN -- no cycle in new formation
-                                                    u.path             := v.path || make_configkey_bystr(u.sub_ce_id, u.sub_cfg_id);
+                                                    u.path             := v.path || cfg;
                                                     u.depth            := v.depth + 1;
                                                     u.cycle_detected   := NOT (idx IS NULL);
                                                     IF i <= rez_len THEN
@@ -984,7 +986,6 @@ DECLARE
         rec RECORD;
 BEGIN
         start_cfg_tr:= par_cfg_tr;
-
         super_results:= par_accum;
         -- dig supers
         start_cfg_tr.depth:= start_cfg_tr.depth + 1; -- small workaround
@@ -1096,8 +1097,7 @@ BEGIN
                 RAISE EXCEPTION 'Exception in "related_cfgs_ofcfg"! Mode is not supported: %!', par_mode;
         END IF; END IF;
         results:= ARRAY[] :: sch_<<$app_name$>>.t_configs_tree_rel[];
-        IF par_mode = 0 THEN RETURN results;
-        END IF;
+        IF par_mode = 0 THEN RETURN results; END IF;
 
         mode1:=     par_mode / 10;  -- super-
         mode2:= mod(par_mode , 10); -- sub-
@@ -1154,13 +1154,8 @@ CREATE OR REPLACE FUNCTION configs_that_use_subconfig(
 SET search_path = sch_<<$app_name$>> -- , comn_funs, public
 LANGUAGE plpgsql
 AS $$
-DECLARE
-        g sch_<<$app_name$>>.t_config_key;
-        r sch_<<$app_name$>>.t_configs_tree_rel[];
-BEGIN
-        g:= optimize_configkey(par_config_key);
-        r:= related_cfgs_ofcfg(g, 10 + 10 * (par_recursive :: integer), par_populate_subconfig_links);
-
+DECLARE r sch_<<$app_name$>>.t_configs_tree_rel[];
+BEGIN   r:= related_cfgs_ofcfg(optimize_configkey(par_config_key), 10 + 10 * (par_recursive :: integer), par_populate_subconfig_links);
         RETURN r;
 END;
 $$;
@@ -1343,16 +1338,28 @@ $$;
 
 -------------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION cfg_tree_2_cfgs(par_cfg_tree t_configs_tree_rel[]) RETURNS t_config_key[]
+CREATE OR REPLACE FUNCTION cfg_tree_2_cfgs(par_cfg_tree t_configs_tree_rel[], par_val_lng_code_id integer) RETURNS t_config_key[]
 SET search_path = sch_<<$app_name$>> -- , comn_funs, public
 LANGUAGE plpgsql
 AS $$
-DECLARE r sch_<<$app_name$>>.t_config_key[];
+DECLARE r       t_config_key[];
+        val_lng t_code_key_by_lng;
 BEGIN
-        r:= ARRAY( SELECT make_configkey_bystr(cfg_ts.super_ce_id, cfg_ts.super_cfg_id)
+        val_lng:= make_codekeyl_byid(par_val_lng_code_id);
+        r:= ARRAY( SELECT make_configkey(
+                                make_confentitykey_byid(cfg_ts.super_ce_id)
+                              , cfg_ts.super_cfg_id
+                              , FALSE
+                              , val_lng
+                              )
                    FROM unnest(par_cfg_tree) as cfg_ts
                    UNION
-                   SELECT make_configkey_bystr(cfg_ts.sub_ce_id, cfg_ts.sub_cfg_id)
+                   SELECT make_configkey(
+                                make_confentitykey_byid(cfg_ts.sub_ce_id)
+                              , cfg_ts.sub_cfg_id
+                              , FALSE
+                              , val_lng
+                              )
                    FROM unnest(par_cfg_tree) as cfg_ts
         );
 
@@ -1382,7 +1389,7 @@ CREATE TYPE t_analyzed_cfgs_set AS (
 );
 
 -- bad style programming here
-CREATE OR REPLACE FUNCTION analyze_cfgs_tree(par_config_tree t_configs_tree_rel[], par_exclude_cfg t_config_key, par_asc_depth boolean) RETURNS t_analyzed_cfgs_set
+CREATE OR REPLACE FUNCTION analyze_cfgs_tree(par_config_tree t_configs_tree_rel[], par_exclude_cfg t_config_key, par_asc_depth boolean, par_val_lng_id integer) RETURNS t_analyzed_cfgs_set
 SET search_path = sch_<<$app_name$>> -- , comn_funs, public
 LANGUAGE plpgsql
 AS $$
@@ -1412,6 +1419,7 @@ DECLARE
         exclud_pers boolean;
         first_itera boolean;
         first_layer boolean;
+        val_lng t_code_key_by_lng;
 
 BEGIN
         IF par_asc_depth IS NULL THEN
@@ -1433,6 +1441,7 @@ BEGIN
                 exclud_cfg_ce_id:= code_id_of_confentitykey(exclud_cfg.confentity_key);
                 exclud_cfg_id:= exclud_cfg.config_id;
         END IF;
+        val_lng:= make_codekeyl_byid(par_val_lng_id);
 
         -- separate cycles from workset; handle "par_exclude_cfg" exclusion
         new_work_set:= ARRAY[] :: t_configs_tree_rel[];
@@ -1452,8 +1461,8 @@ BEGIN
                 END IF;
 
                 IF cur_ct.cycle_detected THEN
-                        super:= make_configkey_bystr(cur_ct.super_ce_id, cur_ct.super_cfg_id);
-                        sub:=   make_configkey_bystr(cur_ct.sub_ce_id  , cur_ct.sub_cfg_id);
+                        super:= make_configkey(make_confentitykey_byid(cur_ct.super_ce_id), cur_ct.super_cfg_id, FALSE, val_lng);
+                        sub:=   make_configkey(make_confentitykey_byid(cur_ct.sub_ce_id  ), cur_ct.sub_cfg_id  , FALSE, val_lng);
                         sub_idx:=   cfg_idx_in_list(sub  , r.involved_in_cycles);
                         super_idx:= cfg_idx_in_list(super, r.involved_in_cycles);
 
@@ -1490,8 +1499,8 @@ BEGIN
                 WHILE i < l LOOP
                         i:= i + 1;
                         cur_ct:= work_set[i];
-                        super:= make_configkey_bystr(cur_ct.super_ce_id, cur_ct.super_cfg_id);
-                        sub:=   make_configkey_bystr(cur_ct.sub_ce_id  , cur_ct.sub_cfg_id);
+                        super:= make_configkey(make_confentitykey_byid(cur_ct.super_ce_id), cur_ct.super_cfg_id, FALSE, val_lng);
+                        sub:=   make_configkey(make_confentitykey_byid(cur_ct.sub_ce_id  ), cur_ct.sub_cfg_id  , FALSE, val_lng);
                         sub_idx:=   cfg_idx_in_list(sub  , r.involved_in_cycles);
                         super_idx:= cfg_idx_in_list(super, r.involved_in_cycles);
                         IF sub_idx IS NULL THEN
@@ -1565,7 +1574,7 @@ BEGIN
                     i:= i + 1;
                     cur_ct:= ct_layer[i];
                     IF cur_ct.super_ce_id IS NOT NULL AND cur_ct.super_cfg_id IS NOT NULL THEN
-                        super:= make_configkey_bystr(cur_ct.super_ce_id, cur_ct.super_cfg_id);
+                        super:= make_configkey(make_confentitykey_byid(cur_ct.super_ce_id), cur_ct.super_cfg_id, FALSE, val_lng);
                         IF cfg_idx_in_list(super, used_cfgs) IS NULL THEN
                                 used_cfgs:= used_cfgs || super;
                                 IF par_asc_depth THEN -- ascending
@@ -1582,7 +1591,7 @@ BEGIN
                         END IF;
                     END IF;
                     IF cur_ct.sub_ce_id   IS NOT NULL AND cur_ct.sub_cfg_id   IS NOT NULL THEN
-                        sub  := make_configkey_bystr(cur_ct.sub_ce_id  , cur_ct.sub_cfg_id  );
+                        sub  := make_configkey(make_confentitykey_byid(cur_ct.sub_ce_id  ), cur_ct.sub_cfg_id  , FALSE, val_lng);
                         IF cfg_idx_in_list(sub, used_cfgs) IS NULL THEN
                                 used_cfgs:= used_cfgs || sub;
                                 IF par_asc_depth THEN -- ascending
@@ -1618,7 +1627,7 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION analyze_cfgs_tree(par_config_tree t_configs_tree_rel[], par_exclude_cfg t_config_key, par_asc_depth boolean) IS
+COMMENT ON FUNCTION analyze_cfgs_tree(par_config_tree t_configs_tree_rel[], par_exclude_cfg t_config_key, par_asc_depth boolean, par_val_lng_id integer) IS
 'Makes a set of "t_config_key" from a set of "t_configs_tree_rel".
 Phases:
 1. All configs that participate in cycles are separated from input. The participation is detected by field "cycle_detected", but not "super_complete" or "sub_complete"!
@@ -1654,8 +1663,8 @@ GRANT EXECUTE ON FUNCTION show_cfgtreerow_path(par_configs_tree t_configs_tree_r
 
 -- Analytic functions:
 GRANT EXECUTE ON FUNCTION cfg_idx_in_list(par_configkey t_config_key, par_config_list t_config_key[])TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION cfg_tree_2_cfgs(par_cfg_tree t_configs_tree_rel[])TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION analyze_cfgs_tree(par_config_tree t_configs_tree_rel[], par_exclude_cfg t_config_key, par_asc_depth boolean)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION cfg_tree_2_cfgs(par_cfg_tree t_configs_tree_rel[], par_val_lng_code_id integer) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION analyze_cfgs_tree(par_config_tree t_configs_tree_rel[], par_exclude_cfg t_config_key, par_asc_depth boolean, par_val_lng_id integer) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 
 -- Lookup functions:
 GRANT EXECUTE ON FUNCTION super_cfgs_of(par_config_key t_config_key, par_value_source_types t_cfg_tree_rel_type[])TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;

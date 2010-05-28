@@ -15,16 +15,17 @@
 CREATE TYPE t_cpvalue_uni AS (
           type                t_confparam_type
         , value               varchar
+        , lng_code_id         integer
         , subcfg_ref_param_id varchar
         , subcfg_ref_usage    t_subconfig_value_linking_read_rule
         );
 
 CREATE OR REPLACE FUNCTION mk_cpvalue_null() RETURNS t_cpvalue_uni AS $$
-        SELECT ROW(NULL :: t_confparam_type, NULL :: varchar, NULL :: varchar, NULL :: varchar) :: sch_<<$app_name$>>.t_cpvalue_uni;
+        SELECT ROW(NULL :: t_confparam_type, NULL :: varchar, NULL :: integer, NULL :: varchar, NULL :: varchar) :: sch_<<$app_name$>>.t_cpvalue_uni;
 $$ LANGUAGE SQL IMMUTABLE;
 
-CREATE OR REPLACE FUNCTION mk_cpvalue_l(value varchar) RETURNS t_cpvalue_uni AS $$
-        SELECT ROW('leaf' :: t_confparam_type, $1, NULL :: varchar, NULL :: varchar) :: sch_<<$app_name$>>.t_cpvalue_uni;
+CREATE OR REPLACE FUNCTION mk_cpvalue_l(value varchar, lng integer) RETURNS t_cpvalue_uni AS $$
+        SELECT ROW('leaf' :: t_confparam_type, $1, $2, NULL :: varchar, NULL :: varchar) :: sch_<<$app_name$>>.t_cpvalue_uni;
 $$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION mk_cpvalue_s(
@@ -32,7 +33,7 @@ CREATE OR REPLACE FUNCTION mk_cpvalue_s(
         , subcfg_ref_param_id varchar
         , subcfg_ref_usage    t_subconfig_value_linking_read_rule
         ) RETURNS t_cpvalue_uni AS $$
-        SELECT ROW('subconfig' :: t_confparam_type, $1, $2, $3) :: sch_<<$app_name$>>.t_cpvalue_uni;
+        SELECT ROW('subconfig' :: t_confparam_type, $1, NULL :: integer, $2, $3) :: sch_<<$app_name$>>.t_cpvalue_uni;
 $$ LANGUAGE SQL IMMUTABLE;
 
 CREATE OR REPLACE FUNCTION isconsistent_cpvalue(par_value t_cpvalue_uni) RETURNS boolean AS $$
@@ -69,7 +70,7 @@ CREATE OR REPLACE FUNCTION isnull_cpvalue(
                    WHEN TRUE THEN TRUE
                    ELSE CASE $2 IS NOT DISTINCT FROM TRUE
                             WHEN TRUE THEN
-                                ($1.type IS NULL) AND ($1.value IS NULL) AND ($1.subcfg_ref_param_id IS NULL) AND ($1.subcfg_ref_usage IS NULL)
+                                $1 IS NULL
                             ELSE NOT (sch_<<$app_name$>>.isconsistent_cpvalue($1) AND sch_<<$app_name$>>.isdefined_cpvalue($1))
                         END
                END
@@ -84,6 +85,7 @@ CREATE TYPE t_cparameter_uni AS (
         , allow_null_final_value      boolean
         , use_default_instead_of_null t_confparam_default_usage
         , subconfentity_code_id       integer
+        , lnged_paramvalue_dflt_src   t_lnged_paramvalue_dflt_src
         , default_value               t_cpvalue_uni
         );
 
@@ -94,6 +96,7 @@ CREATE OR REPLACE FUNCTION mk_cparameter_uni(
         , par_allow_null_final_value      boolean
         , par_use_default_instead_of_null t_confparam_default_usage
         , par_subconfentity_code_id       integer
+        , par_lnged_paramvalue_dflt_src   t_lnged_paramvalue_dflt_src
         , par_default_value               t_cpvalue_uni
         ) RETURNS t_cparameter_uni AS $$
 DECLARE r sch_<<$app_name$>>.t_cparameter_uni;
@@ -110,6 +113,7 @@ BEGIN
                , par_allow_null_final_value
                , par_use_default_instead_of_null
                , par_subconfentity_code_id
+               , par_lnged_paramvalue_dflt_src
                , par_default_value
                ) :: sch_<<$app_name$>>.t_cparameter_uni;
         RETURN r;
@@ -266,9 +270,7 @@ DECLARE
         g  sch_<<$app_name$>>.t_confentityparam_key;
         n  varchar;
         r  sch_<<$app_name$>>.t_cparameter_uni;
-        dv sch_<<$app_name$>>.t_cpvalue_uni;
         rec        RECORD;
-        subce_id   integer;
         rows_count integer;
 BEGIN
         g:= optimize_confentityparamkey(par_confparam_key, FALSE);
@@ -280,7 +282,8 @@ BEGIN
                 , cp.allow_null_final_value
                 , cp.use_default_instead_of_null
                 , NULL :: integer
-                , NULL :: t_cpvalue_uni
+                , NULL :: t_lnged_paramvalue_dflt_src
+                , mk_cpvalue_null()
                 ) AS r1
         INTO rec
         FROM configurations_parameters AS cp
@@ -294,34 +297,35 @@ BEGIN
 
         r:= rec.r1;
 
-        subce_id:= NULL :: integer;
-
         CASE r.type
             WHEN 'leaf' THEN
-                dv:= (ARRAY(
-                        SELECT mk_cpvalue_l(cp_l.default_value)
-                        FROM configurations_parameters__leafs AS cp_l
-                        WHERE cp_l.parameter_id       = g.param_key
-                          AND cp_l.confentity_code_id = code_id_of_confentitykey(g.confentity_key)
-                     ))[1];
+                FOR rec IN
+                      SELECT mk_cpvalue_l(cp_l.default_value, NULL :: integer) AS r1
+                           , cp_l.lnged_paramvalue_dflt_src AS r2
+                      FROM configurations_parameters__leafs AS cp_l
+                      WHERE cp_l.parameter_id       = g.param_key
+                        AND cp_l.confentity_code_id = code_id_of_confentitykey(g.confentity_key)
+                LOOP
+                      r.default_value:= rec.r1;
+                      r.lnged_paramvalue_dflt_src:= rec.r2;
+                END LOOP;
             WHEN 'subconfig' THEN
-                SELECT mk_cpvalue_s(
-                          cp_s.overload_default_subconfig
-                        , cp_s.overload_default_link
-                        , cp_s.overload_default_link_usage
-                        ) AS r1
-                     , cp_s.subconfentity_code_id AS r2
-                INTO rec
-                FROM configurations_parameters__subconfigs AS cp_s
-                WHERE cp_s.parameter_id       = g.param_key
-                  AND cp_s.confentity_code_id = code_id_of_confentitykey(g.confentity_key);
-                dv:= rec.r1;
-                subce_id:= rec.r2;
+                FOR rec IN
+                      SELECT mk_cpvalue_s(
+                                cp_s.overload_default_subconfig
+                              , cp_s.overload_default_link
+                              , cp_s.overload_default_link_usage
+                              ) AS r1
+                           , cp_s.subconfentity_code_id AS r2
+                      FROM configurations_parameters__subconfigs AS cp_s
+                      WHERE cp_s.parameter_id       = g.param_key
+                        AND cp_s.confentity_code_id = code_id_of_confentitykey(g.confentity_key)
+                LOOP
+                      r.default_value        := rec.r1;
+                      r.subconfentity_code_id:= rec.r2;
+                END LOOP;
             ELSE RAISE EXCEPTION 'An error occurred in function "determine_cparameter" for key: %! Unsupported parameter type: "%".', show_confentityparamkey(g), r.type;
         END CASE;
-
-        r.default_value:= dv;
-        r.subconfentity_code_id:= subce_id;
 
         RETURN r;
 END;
@@ -347,7 +351,8 @@ BEGIN
                         , cp_l.allow_null_final_value
                         , cp_l.use_default_instead_of_null
                         , NULL :: integer
-                        , mk_cpvalue_l(cp_l.default_value)
+                        , cp_l.lnged_paramvalue_dflt_src
+                        , mk_cpvalue_l(cp_l.default_value, NULL :: integer)
                         )
                 FROM ( configurations_parameters AS cp
                           LEFT OUTER JOIN
@@ -364,6 +369,7 @@ BEGIN
                         , cp_s.allow_null_final_value
                         , cp_s.use_default_instead_of_null
                         , cp_s.subconfentity_code_id
+                        , NULL :: t_lnged_paramvalue_dflt_src
                         , mk_cpvalue_s(
                             cp_s.overload_default_subconfig
                           , cp_s.overload_default_link
@@ -1000,7 +1006,7 @@ Relies on "deinstaniate_confparam" function.
 
 -- Reference functions:
 GRANT EXECUTE ON FUNCTION mk_cpvalue_null()TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
-GRANT EXECUTE ON FUNCTION mk_cpvalue_l(value varchar)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+GRANT EXECUTE ON FUNCTION mk_cpvalue_l(value varchar, lng integer)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION mk_cpvalue_s(value varchar, subcfg_ref_param_id varchar, subcfg_ref_usage t_subconfig_value_linking_read_rule)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION isconsistent_cpvalue(par_value t_cpvalue_uni)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION isdefined_cpvalue(par_value t_cpvalue_uni)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
@@ -1012,10 +1018,11 @@ GRANT EXECUTE ON FUNCTION mk_cparameter_uni(
         , par_constraints_array           t_confparam_constraint[]
         , par_allow_null_final_value      boolean
         , par_use_default_instead_of_null t_confparam_default_usage
-        , par_subconfentity_code_id            integer
+        , par_subconfentity_code_id       integer
+        , par_par_lnged_paramvalue_dflt_src t_lnged_paramvalue_dflt_src
         , par_default_value               t_cpvalue_uni
-        )
-TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+        ) TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
+
 
 GRANT EXECUTE ON FUNCTION make_confentityparamkey(par_confentity_key t_confentity_key, key varchar, key_is_lnged boolean)TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
 GRANT EXECUTE ON FUNCTION make_confentityparamkey_null()TO user_db<<$db_name$>>_app<<$app_name$>>_data_admin, user_db<<$db_name$>>_app<<$app_name$>>_data_reader;
